@@ -219,7 +219,7 @@ export async function uploadWineryPhoto(wineryId, file) {
 // ══════════════════════════════════════════════════════════════
 
 // Admin email(s) — only these users see admin pages
-export const ADMIN_EMAILS = ["anthony@wargamingintel.com"];
+export const ADMIN_EMAILS = ["anthonyo@techsageconsultations.com"];
 
 export const isAdmin = (user) => user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
 
