@@ -39,8 +39,21 @@ export async function signInWithEmail(email, password) {
   try {
     return await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
+    // Only auto-create if the account truly doesn't exist
     if (err.code === "auth/user-not-found") {
       return await createUserWithEmailAndPassword(auth, email, password);
+    }
+    // Firebase v10+ returns invalid-credential for wrong password OR missing account.
+    // Try creating — if the account already exists, it's a wrong-password situation.
+    if (err.code === "auth/invalid-credential") {
+      try {
+        return await createUserWithEmailAndPassword(auth, email, password);
+      } catch (createErr) {
+        if (createErr.code === "auth/email-already-in-use") {
+          throw new Error("Incorrect password. Please try again.");
+        }
+        throw createErr;
+      }
     }
     throw err;
   }
