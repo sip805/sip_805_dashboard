@@ -213,3 +213,100 @@ export async function uploadWineryPhoto(wineryId, file) {
 
   return { success: true, url };
 }
+
+// ══════════════════════════════════════════════════════════════
+// ADMIN FUNCTIONS
+// ══════════════════════════════════════════════════════════════
+
+// Admin email(s) — only these users see admin pages
+export const ADMIN_EMAILS = ["anthony@wargamingintel.com"];
+
+export const isAdmin = (user) => user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase());
+
+// ── Winery Claims ───────────────────────────────────────────
+// When a winery owner registers, their claim goes to "wineryClaims" for approval
+export async function submitWineryClaim(uid, email, wineryId, wineryName) {
+  return setDoc(doc(db, "wineryClaims", uid), {
+    uid,
+    email,
+    wineryId,
+    wineryName,
+    status: "pending", // pending | approved | rejected
+    submittedAt: serverTimestamp(),
+  });
+}
+
+export async function getPendingClaims() {
+  const q = query(collection(db, "wineryClaims"), where("status", "==", "pending"), orderBy("submittedAt", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getAllClaims() {
+  const q = query(collection(db, "wineryClaims"), orderBy("submittedAt", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function approveClaim(uid) {
+  const claimSnap = await getDoc(doc(db, "wineryClaims", uid));
+  if (!claimSnap.exists()) throw new Error("Claim not found");
+  const claim = claimSnap.data();
+
+  // Create their winery owner profile
+  await setDoc(doc(db, "wineryOwners", uid), {
+    wineryId: claim.wineryId,
+    wineryName: claim.wineryName,
+    tier: "free",
+    email: claim.email,
+    approvedAt: serverTimestamp(),
+    createdAt: claim.submittedAt,
+  });
+
+  // Update claim status
+  await updateDoc(doc(db, "wineryClaims", uid), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+  });
+}
+
+export async function rejectClaim(uid, reason = "") {
+  await updateDoc(doc(db, "wineryClaims", uid), {
+    status: "rejected",
+    rejectionReason: reason,
+    reviewedAt: serverTimestamp(),
+  });
+}
+
+// ── Admin: All Winery Owners ────────────────────────────────
+export async function getAllWineryOwners() {
+  const snap = await getDocs(collection(db, "wineryOwners"));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// ── Admin: All Users (from visits collection — tracks app users) ──
+export async function getRecentVisits(limitCount = 100) {
+  const q = query(collection(db, "visits"), orderBy("createdAt", "desc"), limit(limitCount));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({
+    id: d.id,
+    ...d.data(),
+    date: d.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  }));
+}
+
+// ── Admin: Platform Stats ───────────────────────────────────
+export async function getPlatformStats() {
+  const [owners, claims, visits] = await Promise.all([
+    getDocs(collection(db, "wineryOwners")),
+    getDocs(collection(db, "wineryClaims")),
+    getDocs(query(collection(db, "visits"), orderBy("createdAt", "desc"), limit(500))),
+  ]);
+  return {
+    totalOwners: owners.size,
+    totalClaims: claims.size,
+    pendingClaims: claims.docs.filter(d => d.data().status === "pending").length,
+    totalCheckIns: visits.size,
+    recentVisits: visits.docs.slice(0, 20).map(d => ({ id: d.id, ...d.data() })),
+  };
+}
