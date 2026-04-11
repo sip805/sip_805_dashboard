@@ -487,7 +487,7 @@ export default function Landing({ onEnterDashboard }) {
       <section className="pt-28 pb-16 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-            <Zap className="w-3.5 h-3.5" /> Now serving 124 Central Coast wineries
+            <Zap className="w-3.5 h-3.5" /> 124 Central Coast wineries listed
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
             Know your visitors<br />
@@ -511,9 +511,9 @@ export default function Landing({ onEnterDashboard }) {
       <section className="bg-gradient-to-r from-purple-700 to-indigo-800 py-10 px-4">
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-around gap-6">
           <StatBadge value="124" label="Wineries Listed" />
-          <StatBadge value="6" label="Wine Trails" />
-          <StatBadge value="12K+" label="Monthly App Users" />
-          <StatBadge value="4.7" label="Avg Winery Rating" />
+          <StatBadge value="6" label="Curated Wine Trails" />
+          <StatBadge value="5" label="Regions Covered" />
+          <StatBadge value="Free" label="To Get Started" />
         </div>
       </section>
 
@@ -600,7 +600,7 @@ export default function Landing({ onEnterDashboard }) {
       <section className="py-20 px-4 bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">Ready to grow your tasting room?</h2>
-          <p className="text-purple-200 mt-4 text-lg">Join 124 Central Coast wineries already on Sip805. Free to start, powerful when you upgrade.</p>
+          <p className="text-purple-200 mt-4 text-lg">124 Central Coast wineries already listed on Sip805. Claim yours. Free to start, powerful when you upgrade.</p>
           <button onClick={onEnterDashboard} className="mt-8 bg-white text-purple-700 font-bold px-10 py-4 rounded-xl hover:bg-purple-50 transition text-lg">
             Get Started Free
           </button>
