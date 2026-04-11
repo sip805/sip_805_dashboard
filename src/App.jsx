@@ -5,7 +5,8 @@ import {
   Lock, Crown, Calendar, Clock, Filter, Download, Bell,
   MapPin, Zap, Target, PieChart, Activity, ChevronRight,
   Menu, X, ExternalLink, AlertCircle, CheckCircle,
-  Pencil, Upload, Image, Plus, Trash2, Save, Globe, Phone, Dog, Tag
+  Pencil, Upload, Image, Plus, Trash2, Save, Globe, Phone, Dog, Tag,
+  Shield, UserCheck, UserX, ClipboardList, RefreshCw
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart as RPieChart, Pie, Cell,
@@ -15,7 +16,9 @@ import Landing from "./Landing.jsx";
 import {
   auth, signInWithGoogle, signInWithEmail, logOut, onAuthChange,
   getWineryProfile, createWineryProfile, getWineryVisits, getAllVisits,
-  getWineryProfileEdits, saveWineryProfileEdits, uploadWineryPhoto, validateWineryEdits
+  getWineryProfileEdits, saveWineryProfileEdits, uploadWineryPhoto, validateWineryEdits,
+  isAdmin, submitWineryClaim, getPendingClaims, getAllClaims,
+  approveClaim, rejectClaim, getAllWineryOwners, getRecentVisits, getPlatformStats
 } from "./firebaseClient.js";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -912,6 +915,395 @@ const ProfileEditorPage = ({ winery, user, tier }) => {
   );
 };
 
+// ══════════════════════════════════════════════════════════════════
+// ADMIN PAGES — only visible to admin emails
+// ══════════════════════════════════════════════════════════════════
+
+// ── ADMIN OVERVIEW ──────────────────────────────────────────────
+const AdminOverviewPage = () => {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const s = await getPlatformStats();
+      setStats(s);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (loading || !stats) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Admin Overview</h2>
+          <p className="text-sm text-gray-400 mt-1">Platform-wide statistics</p>
+        </div>
+        <button onClick={load} className="flex items-center gap-2 text-xs text-purple-600 font-medium hover:text-purple-700"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center mb-3"><Users className="w-5 h-5 text-purple-600" /></div>
+          <div className="text-2xl font-bold text-gray-900">{stats.totalOwners}</div>
+          <div className="text-xs text-gray-400">Registered Owners</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-3"><ClipboardList className="w-5 h-5 text-amber-600" /></div>
+          <div className="text-2xl font-bold text-gray-900">{stats.pendingClaims}</div>
+          <div className="text-xs text-gray-400">Pending Claims</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-3"><CheckCircle className="w-5 h-5 text-blue-600" /></div>
+          <div className="text-2xl font-bold text-gray-900">{stats.totalCheckIns}</div>
+          <div className="text-xs text-gray-400">Total Check-ins</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-3"><Wine className="w-5 h-5 text-green-600" /></div>
+          <div className="text-2xl font-bold text-gray-900">{WINERIES.length}</div>
+          <div className="text-xs text-gray-400">Wineries in Database</div>
+        </div>
+      </div>
+
+      {/* Recent Check-ins */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Check-ins</h3>
+        {stats.recentVisits.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-8">No check-ins yet. They'll appear here once users start visiting wineries.</p>
+        ) : (
+          <div className="space-y-2">
+            {stats.recentVisits.slice(0, 10).map((v, i) => {
+              const w = WINERIES.find(x => x.id === v.wineryId);
+              return (
+                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">
+                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center"><Wine className="w-4 h-4 text-purple-600" /></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{w?.name || `Winery #${v.wineryId}`}</div>
+                    <div className="text-xs text-gray-400">{v.wineryName || ""}</div>
+                  </div>
+                  {v.rating && <div className="flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400" /><span className="text-xs font-medium">{v.rating}</span></div>}
+                  <span className="text-[10px] text-gray-400">{v.date ? new Date(v.date).toLocaleDateString() : ""}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── ADMIN CLAIMS PAGE ───────────────────────────────────────────
+const AdminClaimsPage = () => {
+  const [claims, setClaims] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("pending");
+  const [processing, setProcessing] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectModal, setShowRejectModal] = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const c = filter === "pending" ? await getPendingClaims() : await getAllClaims();
+      setClaims(c);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [filter]);
+
+  const handleApprove = async (uid) => {
+    setProcessing(uid);
+    try {
+      await approveClaim(uid);
+      setClaims(prev => prev.map(c => c.id === uid ? { ...c, status: "approved" } : c));
+    } catch (e) { alert("Error: " + e.message); }
+    setProcessing(null);
+  };
+
+  const handleReject = async () => {
+    if (!showRejectModal) return;
+    setProcessing(showRejectModal);
+    try {
+      await rejectClaim(showRejectModal, rejectReason);
+      setClaims(prev => prev.map(c => c.id === showRejectModal ? { ...c, status: "rejected" } : c));
+    } catch (e) { alert("Error: " + e.message); }
+    setProcessing(null);
+    setShowRejectModal(null);
+    setRejectReason("");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Winery Claims</h2>
+          <p className="text-sm text-gray-400 mt-1">Review and approve winery ownership requests</p>
+        </div>
+        <button onClick={load} className="flex items-center gap-2 text-xs text-purple-600 font-medium hover:text-purple-700"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {["pending", "all"].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-md text-sm font-medium transition ${filter === f ? "bg-white shadow-sm text-gray-900" : "text-gray-500"}`}>
+            {f === "pending" ? "Pending" : "All Claims"}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
+      ) : claims.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-gray-700">No {filter === "pending" ? "pending" : ""} claims</h3>
+          <p className="text-sm text-gray-400 mt-1">{filter === "pending" ? "All claims have been reviewed." : "No one has claimed a winery yet."}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {claims.map(claim => {
+            const w = WINERIES.find(x => x.id === claim.wineryId);
+            return (
+              <div key={claim.id} className="bg-white rounded-2xl border border-gray-100 p-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <Wine className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-gray-900">{claim.wineryName || w?.name || `Winery #${claim.wineryId}`}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        claim.status === "pending" ? "bg-amber-50 text-amber-600" :
+                        claim.status === "approved" ? "bg-green-50 text-green-600" :
+                        "bg-red-50 text-red-600"
+                      }`}>{claim.status.toUpperCase()}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      <span className="font-medium text-gray-600">{claim.email}</span>
+                      {claim.submittedAt?.toDate && <span> · Submitted {claim.submittedAt.toDate().toLocaleDateString()}</span>}
+                    </div>
+                    {w && <div className="text-xs text-gray-400 mt-0.5">{w.region} · {w.rating} stars · {w.reviews} reviews</div>}
+                    {claim.rejectionReason && <div className="text-xs text-red-400 mt-1">Reason: {claim.rejectionReason}</div>}
+                  </div>
+                  {claim.status === "pending" && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleApprove(claim.id)}
+                        disabled={processing === claim.id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" /> Approve
+                      </button>
+                      <button
+                        onClick={() => setShowRejectModal(claim.id)}
+                        disabled={processing === claim.id}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+                      >
+                        <UserX className="w-3.5 h-3.5" /> Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h3 className="text-base font-bold text-gray-900 mb-3">Reject Claim</h3>
+            <p className="text-sm text-gray-500 mb-4">Optionally provide a reason for rejection.</p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-purple-400 outline-none resize-none mb-4"
+              placeholder="Reason (optional)..."
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShowRejectModal(null); setRejectReason(""); }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={handleReject} disabled={processing} className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                Reject Claim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── ADMIN WINERIES PAGE ─────────────────────────────────────────
+const AdminWineriesPage = () => {
+  const [owners, setOwners] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const o = await getAllWineryOwners();
+        setOwners(o);
+      } catch (e) { console.error(e); }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Merge owners with winery data
+  const enriched = WINERIES.map(w => {
+    const owner = owners.find(o => o.wineryId === w.id);
+    return { ...w, owner };
+  }).filter(w =>
+    !search || w.name.toLowerCase().includes(search.toLowerCase()) || w.region.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const claimed = enriched.filter(w => w.owner);
+  const unclaimed = enriched.filter(w => !w.owner);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">All Wineries</h2>
+        <p className="text-sm text-gray-400 mt-1">{WINERIES.length} wineries in database · {owners.length} claimed</p>
+      </div>
+
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+        placeholder="Search wineries..."
+      />
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
+      ) : (
+        <>
+          {/* Claimed wineries */}
+          {claimed.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><UserCheck className="w-4 h-4 text-green-600" /> Claimed ({claimed.length})</h3>
+              <div className="space-y-2">
+                {claimed.map(w => (
+                  <div key={w.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: w.gradient || "linear-gradient(135deg, #1a0533, #6b2fa0)" }}>
+                      <Wine className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900">{w.name}</div>
+                      <div className="text-xs text-gray-400">{w.region} · {w.price}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-medium text-green-600">{w.owner.email}</div>
+                      <div className="text-[10px] text-gray-400">{w.owner.tier || "free"} plan</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Unclaimed wineries */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Wine className="w-4 h-4 text-gray-400" /> Unclaimed ({unclaimed.length})</h3>
+            <div className="space-y-1">
+              {unclaimed.map(w => (
+                <div key={w.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">
+                  <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center bg-gray-100">
+                    <Wine className="w-3.5 h-3.5 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-700">{w.name}</div>
+                    <div className="text-xs text-gray-400">{w.region}</div>
+                  </div>
+                  <div className="flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400" /><span className="text-xs">{w.rating}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ── ADMIN USERS PAGE ────────────────────────────────────────────
+const AdminUsersPage = () => {
+  const [visits, setVisits] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const v = await getRecentVisits(200);
+        setVisits(v);
+      } catch (e) { console.error(e); }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Group by user
+  const userMap = {};
+  visits.forEach(v => {
+    const uid = v.userId || v.uid || "anonymous";
+    if (!userMap[uid]) userMap[uid] = { uid, visits: [], wineries: new Set() };
+    userMap[uid].visits.push(v);
+    userMap[uid].wineries.add(v.wineryId);
+  });
+  const users = Object.values(userMap).sort((a, b) => b.visits.length - a.visits.length);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">App Users</h2>
+        <p className="text-sm text-gray-400 mt-1">Users who have checked in via the Sip805 app</p>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
+      ) : users.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+          <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-gray-700">No user activity yet</h3>
+          <p className="text-sm text-gray-400 mt-1">Check-ins from the consumer app will appear here.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500">
+            <div className="col-span-4">User</div>
+            <div className="col-span-2 text-center">Check-ins</div>
+            <div className="col-span-3 text-center">Unique Wineries</div>
+            <div className="col-span-3 text-right">Last Active</div>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {users.map((u, i) => (
+              <div key={i} className="grid grid-cols-12 gap-3 px-5 py-3 items-center hover:bg-gray-50">
+                <div className="col-span-4">
+                  <div className="text-sm font-medium text-gray-900 truncate">{u.visits[0]?.userName || u.uid.slice(0, 12) + "..."}</div>
+                  <div className="text-[10px] text-gray-400 truncate">{u.uid}</div>
+                </div>
+                <div className="col-span-2 text-center text-sm font-semibold text-gray-900">{u.visits.length}</div>
+                <div className="col-span-3 text-center text-sm text-gray-600">{u.wineries.size}</div>
+                <div className="col-span-3 text-right text-xs text-gray-400">{u.visits[0]?.date ? new Date(u.visits[0].date).toLocaleDateString() : "—"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── SETTINGS PAGE ───────────────────────────────────────────────
 const SettingsPage = ({ winery, tier, onLogout }) => (
   <div className="space-y-6">
@@ -1099,17 +1491,80 @@ const LoginScreen = ({ onLogin }) => {
    WINERY SELECTOR (post-login, if no winery profile yet)
    ═══════════════════════════════════════════════════════════════════ */
 
-const WinerySelector = ({ user, onSelect }) => {
+const WinerySelector = ({ user, onSelect, isAdminUser }) => {
   const [search, setSearch] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [selectedClaim, setSelectedClaim] = useState(null);
   const filtered = WINERIES.filter(w => w.name.toLowerCase().includes(search.toLowerCase()) || w.region.toLowerCase().includes(search.toLowerCase()));
+
+  const handleClaim = async (w) => {
+    if (isAdminUser) {
+      // Admins bypass the claim flow
+      onSelect(w);
+      return;
+    }
+    setSelectedClaim(w);
+  };
+
+  const handleSubmitClaim = async () => {
+    if (!selectedClaim) return;
+    try {
+      await submitWineryClaim(user.uid, user.email, selectedClaim.id, selectedClaim.name);
+      setSubmitted(true);
+    } catch (e) {
+      alert("Error submitting claim: " + e.message);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">Claim Submitted!</h2>
+          <p className="text-sm text-gray-500 mt-3 leading-relaxed">
+            Your claim for <span className="font-semibold text-gray-700">{selectedClaim.name}</span> has been submitted for review. You'll get access once approved.
+          </p>
+          <p className="text-xs text-gray-400 mt-4">This usually takes less than 24 hours.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedClaim) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6">
+          <div className="text-center mb-6">
+            <div className="w-14 h-14 rounded-xl mx-auto mb-3 flex items-center justify-center" style={{ background: selectedClaim.gradient || "linear-gradient(135deg, #1a0533, #6b2fa0)" }}>
+              <Wine className="w-7 h-7 text-white" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Claim {selectedClaim.name}?</h2>
+            <p className="text-sm text-gray-400 mt-1">{selectedClaim.region} · {selectedClaim.price}</p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-4 mb-5">
+            <p className="text-sm text-gray-600 leading-relaxed">
+              By claiming this winery, you're confirming you own or manage <span className="font-semibold">{selectedClaim.name}</span>. Your request will be reviewed before access is granted.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => setSelectedClaim(null)} className="flex-1 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition">Back</button>
+            <button onClick={handleSubmitClaim} className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition">Submit Claim</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg p-6">
         <div className="text-center mb-6">
           <Wine className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-          <h2 className="text-xl font-bold text-gray-900">Select Your Winery</h2>
-          <p className="text-sm text-gray-400 mt-1">Choose the winery you manage</p>
+          <h2 className="text-xl font-bold text-gray-900">{isAdminUser ? "Select a Winery" : "Claim Your Winery"}</h2>
+          <p className="text-sm text-gray-400 mt-1">{isAdminUser ? "Admin: select any winery to view its dashboard" : "Select the winery you own or manage"}</p>
         </div>
         <input
           type="text"
@@ -1120,7 +1575,7 @@ const WinerySelector = ({ user, onSelect }) => {
         />
         <div className="max-h-80 overflow-y-auto space-y-1">
           {filtered.map(w => (
-            <button key={w.id} onClick={() => onSelect(w)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 text-left transition">
+            <button key={w.id} onClick={() => handleClaim(w)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 text-left transition">
               <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
                 <Wine className="w-5 h-5 text-purple-600" />
               </div>
@@ -1150,6 +1605,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const tier = "free"; // TODO: read from Firestore profile
+  const adminUser = user && isAdmin(user);
 
   useEffect(() => {
     const unsub = onAuthChange(async (u) => {
@@ -1161,6 +1617,10 @@ export default function App() {
           const w = WINERIES.find(x => x.id === profile.wineryId);
           if (w) setWinery(w);
         }
+        // Admin auto-selects first winery if no profile yet
+        if (isAdmin(u) && !profile?.wineryId) {
+          setWinery(WINERIES[0]);
+        }
       }
       setAuthLoading(false);
     });
@@ -1169,8 +1629,9 @@ export default function App() {
 
   const handleSelectWinery = async (w) => {
     setWinery(w);
-    if (user) {
-      await createWineryProfile(user.uid, { wineryId: w.id, wineryName: w.name });
+    if (user && isAdmin(user)) {
+      // Admin: just select, don't create a claim
+      await createWineryProfile(user.uid, { wineryId: w.id, wineryName: w.name, isAdmin: true });
     }
   };
 
@@ -1196,7 +1657,7 @@ export default function App() {
   // Show landing page by default; dashboard only after clicking "Get Started" or if already authenticated
   if (!showDashboard && !user) return <Landing onEnterDashboard={() => setShowDashboard(true)} />;
   if (!user) return <LoginScreen />;
-  if (!winery) return <WinerySelector user={user} onSelect={handleSelectWinery} />;
+  if (!winery) return <WinerySelector user={user} onSelect={handleSelectWinery} isAdminUser={adminUser} />;
 
   const navItems = [
     { id: "overview", label: "Overview", icon: BarChart3 },
@@ -1205,6 +1666,14 @@ export default function App() {
     { id: "benchmark", label: "Benchmark", icon: Award },
     { id: "profile", label: "Edit Profile", icon: Pencil },
     { id: "settings", label: "Settings", icon: Settings },
+    // Admin pages — only shown to admin users
+    ...(adminUser ? [
+      { id: "divider", label: "", icon: null },
+      { id: "admin-overview", label: "Admin", icon: Shield },
+      { id: "admin-claims", label: "Claims", icon: ClipboardList },
+      { id: "admin-wineries", label: "Wineries", icon: Wine },
+      { id: "admin-users", label: "Users", icon: Users },
+    ] : []),
   ];
 
   return (
@@ -1225,17 +1694,20 @@ export default function App() {
           <p className="text-[10px] text-purple-500 font-semibold tracking-wider mt-0.5">WINERY DASHBOARD</p>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => { setPage(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${page === item.id ? "bg-purple-50 text-purple-700" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
-            >
-              <item.icon className="w-4.5 h-4.5" />
-              {item.label}
-            </button>
-          ))}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {navItems.map(item => {
+            if (item.id === "divider") return <div key="divider" className="border-t border-gray-100 my-2 mx-2" />;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${page === item.id ? "bg-purple-50 text-purple-700" : item.id.startsWith("admin") ? "text-amber-600 hover:bg-amber-50" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
+              >
+                <item.icon className="w-4.5 h-4.5" />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="p-3 border-t border-gray-100">
@@ -1285,6 +1757,10 @@ export default function App() {
           {page === "benchmark" && <BenchmarkPage data={data} winery={winery} tier={tier} />}
           {page === "profile" && <ProfileEditorPage winery={winery} user={user} tier={tier} />}
           {page === "settings" && <SettingsPage winery={winery} tier={tier} onLogout={handleLogout} />}
+          {adminUser && page === "admin-overview" && <AdminOverviewPage />}
+          {adminUser && page === "admin-claims" && <AdminClaimsPage />}
+          {adminUser && page === "admin-wineries" && <AdminWineriesPage />}
+          {adminUser && page === "admin-users" && <AdminUsersPage />}
         </div>
       </main>
     </div>
