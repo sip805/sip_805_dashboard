@@ -84,6 +84,25 @@ export async function getClaimStatus(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
+// New Winery Submissions (winerySubmissions/{uid})
+// For owners whose winery is NOT in the Sip805 list yet.
+// Admin reviews and either creates the winery + approves, or rejects.
+
+export async function submitWinerySubmission(uid, email, details) {
+  return setDoc(doc(db, "winerySubmissions", uid), {
+    uid,
+    email,
+    ...details,
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function getSubmissionStatus(uid) {
+  const snap = await getDoc(doc(db, "winerySubmissions", uid));
+  return snap.exists() ? snap.data() : null;
+}
+
 // Winery Profile Edits (wineryProfiles/{wineryId})
 const PHONE_RE = /^\(\d{3}\)\s?\d{3}-\d{4}$/;
 const URL_RE = /^[a-zA-Z0-9][\w.-]*\.[a-zA-Z]{2,}(\/.*)?$/;
@@ -160,3 +179,4 @@ export async function uploadPhoto(wineryId, file) {
 
   return { success: true, url };
 }
+
