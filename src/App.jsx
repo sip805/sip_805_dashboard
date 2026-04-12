@@ -112,54 +112,58 @@ const TRAILS = [
    DEMO DATA GENERATOR — simulates analytics until real data builds up
    ═══════════════════════════════════════════════════════════════════ */
 
-function generateDemoData(wineryId) {
+function buildDataFromVisits(visits, wineryId) {
+  // Builds the same data shape from real Firestore visits.
+  // If visits is empty (app hasn't launched), everything will be zero.
   const now = new Date();
   const daily = [];
   const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, visitors: 0 }));
 
+  // Build a map of date → { visitors, checkIns, ratings }
+  const dayMap = {};
+  (visits || []).forEach(v => {
+    const d = v.date ? v.date.split("T")[0] : null;
+    if (!d) return;
+    if (!dayMap[d]) dayMap[d] = { visitors: 0, checkIns: 0, ratingSum: 0, ratingCount: 0 };
+    dayMap[d].visitors += 1;
+    if (v.checkedIn) dayMap[d].checkIns += 1;
+    if (v.rating) { dayMap[d].ratingSum += v.rating; dayMap[d].ratingCount += 1; }
+    // Hourly
+    const hour = new Date(v.date).getHours();
+    if (hour >= 0 && hour < 24) hourly[hour].visitors += 1;
+  });
+
+  // Generate 90 days of entries (real data or zeros)
   for (let d = 89; d >= 0; d--) {
     const date = new Date(now);
     date.setDate(date.getDate() - d);
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const base = isWeekend ? 18 + (wineryId % 7) * 3 : 8 + (wineryId % 5) * 2;
-    const seasonBoost = (date.getMonth() >= 4 && date.getMonth() <= 9) ? 1.4 : 1;
-    const visitors = Math.round((base + Math.random() * 12) * seasonBoost);
-    const checkIns = Math.round(visitors * (0.25 + Math.random() * 0.2));
+    const key = date.toISOString().split("T")[0];
+    const entry = dayMap[key] || { visitors: 0, checkIns: 0, ratingSum: 0, ratingCount: 0 };
     daily.push({
-      date: date.toISOString().split("T")[0],
+      date: key,
       label: `${date.getMonth() + 1}/${date.getDate()}`,
-      visitors,
-      checkIns,
-      avgRating: +(4.2 + Math.random() * 0.7).toFixed(1),
+      visitors: entry.visitors,
+      checkIns: entry.checkIns,
+      avgRating: entry.ratingCount > 0 ? +(entry.ratingSum / entry.ratingCount).toFixed(1) : 0,
     });
   }
 
-  // Hourly distribution pattern (peak at 1-3pm)
-  const hourWeights = [0,0,0,0,0,0,0,0,1,3,6,10,14,16,15,12,9,6,3,1,0,0,0,0];
-  const totalW = hourWeights.reduce((a, b) => a + b, 0);
-  const todayVisitors = daily[daily.length - 1].visitors;
-  hourWeights.forEach((w, i) => {
-    hourly[i].visitors = Math.round((w / totalW) * todayVisitors * 3);
+  // Source breakdown (from real data — count by source field, or show zeros)
+  const sourceMap = {};
+  (visits || []).forEach(v => {
+    const src = v.source || "Sip805 App";
+    sourceMap[src] = (sourceMap[src] || 0) + 1;
   });
-
-  // Source breakdown
-  const sources = [
-    { name: "Sip805 App", value: 38 + Math.round(Math.random() * 10), color: "#9333ea" },
-    { name: "Google Maps", value: 22 + Math.round(Math.random() * 8), color: "#3b82f6" },
-    { name: "Direct / Walk-in", value: 18 + Math.round(Math.random() * 6), color: "#16a34a" },
-    { name: "Trail Route", value: 12 + Math.round(Math.random() * 8), color: "#f59e0b" },
-    { name: "Social Media", value: 5 + Math.round(Math.random() * 5), color: "#ef4444" },
-  ];
+  const sourceColors = { "Sip805 App": "#9333ea", "Google Maps": "#3b82f6", "Direct / Walk-in": "#16a34a", "Trail Route": "#f59e0b", "Social Media": "#ef4444" };
+  const sources = Object.keys(sourceColors).map(name => ({
+    name, value: sourceMap[name] || 0, color: sourceColors[name],
+  }));
 
   // Rating distribution
-  const ratings = [
-    { stars: "5 stars", count: 45 + Math.round(Math.random() * 20), color: "#16a34a" },
-    { stars: "4 stars", count: 30 + Math.round(Math.random() * 10), color: "#84cc16" },
-    { stars: "3 stars", count: 10 + Math.round(Math.random() * 5), color: "#f59e0b" },
-    { stars: "2 stars", count: 3 + Math.round(Math.random() * 3), color: "#f97316" },
-    { stars: "1 star", count: 1 + Math.round(Math.random() * 2), color: "#ef4444" },
-  ];
+  const ratingBuckets = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  (visits || []).forEach(v => { if (v.rating >= 1 && v.rating <= 5) ratingBuckets[Math.round(v.rating)] += 1; });
+  const ratingColors = { 5: "#16a34a", 4: "#84cc16", 3: "#f59e0b", 2: "#f97316", 1: "#ef4444" };
+  const ratings = [5, 4, 3, 2, 1].map(s => ({ stars: s === 1 ? "1 star" : `${s} stars`, count: ratingBuckets[s], color: ratingColors[s] }));
 
   const last30 = daily.slice(-30);
   const prev30 = daily.slice(-60, -30);
@@ -167,14 +171,15 @@ function generateDemoData(wineryId) {
   const totalVisitorsPrev = prev30.reduce((s, d) => s + d.visitors, 0);
   const totalCheckIns30 = last30.reduce((s, d) => s + d.checkIns, 0);
   const totalCheckInsPrev = prev30.reduce((s, d) => s + d.checkIns, 0);
-  const avgRating30 = +(last30.reduce((s, d) => s + d.avgRating, 0) / 30).toFixed(1);
+  const ratedDays = last30.filter(d => d.avgRating > 0);
+  const avgRating30 = ratedDays.length > 0 ? +(ratedDays.reduce((s, d) => s + d.avgRating, 0) / ratedDays.length).toFixed(1) : 0;
 
   return {
     daily, hourly, sources, ratings,
     kpi: {
       visitors: { value: totalVisitors30, change: totalVisitorsPrev ? +((totalVisitors30 - totalVisitorsPrev) / totalVisitorsPrev * 100).toFixed(1) : 0 },
       checkIns: { value: totalCheckIns30, change: totalCheckInsPrev ? +((totalCheckIns30 - totalCheckInsPrev) / totalCheckInsPrev * 100).toFixed(1) : 0 },
-      avgRating: { value: avgRating30, change: +(Math.random() * 0.4 - 0.1).toFixed(1) },
+      avgRating: { value: avgRating30, change: 0 },
       trailAppearances: { value: TRAILS.filter(t => t.stops.includes(wineryId)).length, change: 0 },
     },
   };
@@ -1578,6 +1583,10 @@ export default function App() {
   const tier = "free"; // TODO: read from Firestore profile
   const adminUser = user && isAdmin(user);
 
+  const [wineryVisits, setWineryVisits] = useState([]);
+  const [wineryDropdownOpen, setWineryDropdownOpen] = useState(false);
+  const [winerySearch, setWinerySearch] = useState("");
+
   useEffect(() => {
     const unsub = onAuthChange(async (u) => {
       setUser(u);
@@ -1588,22 +1597,28 @@ export default function App() {
           const w = WINERIES.find(x => x.id === profile.wineryId);
           if (w) setWinery(w);
         }
-        // Admin auto-selects first winery if no profile yet
-        if (isAdmin(u) && !profile?.wineryId) {
-          setWinery(WINERIES[0]);
-        }
+        // Admin: don't auto-select — let them pick from dropdown or stay on admin pages
       }
       setAuthLoading(false);
     });
     return unsub;
   }, []);
 
+  // Fetch real visits when winery changes
+  useEffect(() => {
+    if (!winery) { setWineryVisits([]); return; }
+    getWineryVisits(winery.id).then(setWineryVisits).catch(() => setWineryVisits([]));
+  }, [winery?.id]);
+
   const handleSelectWinery = async (w) => {
     setWinery(w);
+    setWineryDropdownOpen(false);
+    setWinerySearch("");
     if (user && isAdmin(user)) {
       // Admin: just select, don't create a claim
-      await createWineryProfile(user.uid, { wineryId: w.id, wineryName: w.name, isAdmin: true });
     }
+    // Switch to overview when a winery is selected
+    if (!page.startsWith("admin")) setPage("overview");
   };
 
   const handleLogout = async () => {
@@ -1614,8 +1629,8 @@ export default function App() {
     setShowDashboard(false);
   };
 
-  // Generate demo data for selected winery
-  const data = useMemo(() => winery ? generateDemoData(winery.id) : null, [winery?.id]);
+  // Build analytics from real Firestore visits (zeros until app launches)
+  const data = useMemo(() => winery ? buildDataFromVisits(wineryVisits, winery.id) : null, [wineryVisits, winery?.id]);
 
   if (authLoading) {
     return (
@@ -1633,7 +1648,7 @@ export default function App() {
   if (!winery && !adminUser) return <WinerySelector user={user} onSelect={handleSelectWinery} isAdminUser={false} />;
 
   // Admin-only nav (no winery selected) vs full nav (winery selected)
-  const wineryNavItems = winery ? [
+  const wineryNavItems = (winery || adminUser) ? [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "traffic", label: "Traffic", icon: Activity },
     { id: "trails", label: "Trails", icon: Map },
@@ -1645,7 +1660,7 @@ export default function App() {
   const navItems = [
     ...wineryNavItems,
     ...(adminUser ? [
-      ...(winery ? [{ id: "divider", label: "", icon: null }] : []),
+      { id: "divider", label: "", icon: null },
       { id: "admin-overview", label: "Admin", icon: Shield },
       { id: "admin-claims", label: "Claims", icon: ClipboardList },
       { id: "admin-wineries", label: "Wineries", icon: Wine },
@@ -1711,13 +1726,47 @@ export default function App() {
             <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="w-5 h-5 text-gray-500" />
             </button>
-            <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
-              {winery ? (
-                <><MapPin className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-600">{winery.name}</span><span className="text-xs text-gray-400">· {winery.region}</span></>
-              ) : (
-                <><Shield className="w-4 h-4 text-amber-500" /><span className="text-sm text-gray-600">Platform Admin</span></>
-              )}
-            </div>
+            {/* Winery dropdown for admin, static display for regular users */}
+            {adminUser ? (
+              <div className="hidden sm:block relative">
+                <button onClick={() => setWineryDropdownOpen(!wineryDropdownOpen)} className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 hover:bg-gray-200 transition">
+                  {winery ? (
+                    <><MapPin className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-600">{winery.name}</span><span className="text-xs text-gray-400">· {winery.region}</span></>
+                  ) : (
+                    <><Wine className="w-4 h-4 text-purple-500" /><span className="text-sm text-gray-600">Select a winery</span></>
+                  )}
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {wineryDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
+                    <div className="p-2 border-b border-gray-100">
+                      <input type="text" placeholder="Search wineries..." value={winerySearch} onChange={e => setWinerySearch(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" autoFocus />
+                    </div>
+                    <div className="max-h-64 overflow-y-auto">
+                      {WINERIES.filter(w => w.name.toLowerCase().includes(winerySearch.toLowerCase()) || w.region.toLowerCase().includes(winerySearch.toLowerCase())).map(w => (
+                        <button key={w.id} onClick={() => handleSelectWinery(w)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-purple-50 transition text-sm ${winery?.id === w.id ? "bg-purple-50 text-purple-700" : "text-gray-600"}`}>
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: w.gradient || "linear-gradient(135deg, #6b2fa0, #9333ea)" }}>
+                            <Wine className="w-3.5 h-3.5 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{w.name}</div>
+                            <div className="text-xs text-gray-400">{w.region}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
+                {winery ? (
+                  <><MapPin className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-600">{winery.name}</span><span className="text-xs text-gray-400">· {winery.region}</span></>
+                ) : (
+                  <><Shield className="w-4 h-4 text-amber-500" /><span className="text-sm text-gray-600">Platform Admin</span></>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {tier === "free" && !adminUser && (
@@ -1731,14 +1780,25 @@ export default function App() {
           </div>
         </header>
 
+        {/* Click-away backdrop for dropdown */}
+        {wineryDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => { setWineryDropdownOpen(false); setWinerySearch(""); }} />}
+
         {/* Page Content */}
         <div className="p-6 max-w-6xl mx-auto">
-          {winery && activePage === "overview" && <OverviewPage data={data} winery={winery} tier={tier} />}
-          {winery && activePage === "traffic" && <TrafficPage data={data} winery={winery} tier={tier} />}
-          {winery && activePage === "trails" && <TrailsPage data={data} winery={winery} tier={tier} />}
-          {winery && activePage === "benchmark" && <BenchmarkPage data={data} winery={winery} tier={tier} />}
-          {winery && activePage === "profile" && <ProfileEditorPage winery={winery} user={user} tier={tier} />}
-          {winery && activePage === "settings" && <SettingsPage winery={winery} tier={tier} onLogout={handleLogout} />}
+          {/* Winery pages — show prompt if no winery selected */}
+          {!winery && !activePage.startsWith("admin") && adminUser && (
+            <div className="text-center py-20">
+              <Wine className="w-12 h-12 text-purple-300 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900">Select a Winery</h2>
+              <p className="text-sm text-gray-400 mt-2">Use the dropdown in the header to pick a winery and view its analytics.</p>
+            </div>
+          )}
+          {winery && activePage === "overview" && <OverviewPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
+          {winery && activePage === "traffic" && <TrafficPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
+          {winery && activePage === "trails" && <TrailsPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
+          {winery && activePage === "benchmark" && <BenchmarkPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
+          {winery && activePage === "profile" && <ProfileEditorPage winery={winery} user={user} tier={adminUser ? "pro" : tier} />}
+          {winery && activePage === "settings" && <SettingsPage winery={winery} tier={adminUser ? "pro" : tier} onLogout={handleLogout} />}
           {adminUser && activePage === "admin-overview" && <AdminOverviewPage />}
           {adminUser && activePage === "admin-claims" && <AdminClaimsPage />}
           {adminUser && activePage === "admin-wineries" && <AdminWineriesPage />}
