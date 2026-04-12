@@ -1,20 +1,24 @@
-// ══════════════════════════════════════════════════════════════
+// ==============================================================
 // ClaimWinery — Searchable winery selector + claim submission
 //
-// Shown after auth when no approved owner profile exists and
-// no pending claim exists. Owner cannot access the dashboard
-// until an admin approves the claim from the admin app.
-// ══════════════════════════════════════════════════════════════
+// TWO-PATH ONBOARDING:
+//   Path A: Winery is already in the Sip805 list -> claim it here
+//   Path B: Winery is NOT listed -> "Add My Winery" CTA routes
+//           to the AddWinery screen (handled by App.jsx)
+//
+// Shown after auth when no approved owner profile, no pending
+// claim, and no pending submission exists. Owner cannot access
+// the dashboard until an admin approves.
+// ==============================================================
 
 import { useState } from "react";
-import { Wine, Star, CheckCircle, LogOut, X } from "lucide-react";
+import { Wine, Star, LogOut, PlusCircle } from "lucide-react";
 import { WINERIES } from "../data/wineries.js";
 import { submitClaim, logOut } from "../firebaseClient.js";
 
-export default function ClaimWinery({ user }) {
+export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const filtered = WINERIES.filter(w =>
@@ -27,36 +31,15 @@ export default function ClaimWinery({ user }) {
     setSubmitting(true);
     try {
       await submitClaim(user.uid, user.email, selected.id, selected.name);
-      setSubmitted(true);
+      // Notify App.jsx to transition to ClaimPending screen
+      if (onClaimSubmitted) onClaimSubmitted({ wineryName: selected.name });
     } catch (e) {
       alert("Error submitting claim: " + e.message);
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
-  // ── Success state ──────────────────────────────────────────
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-xl font-bold text-gray-900">Claim Submitted</h2>
-          <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-            Your claim for <span className="font-semibold text-gray-700">{selected.name}</span> has been submitted for review.
-          </p>
-          <p className="text-xs text-gray-400 mt-2">You'll get dashboard access once approved.</p>
-          <p className="text-xs text-gray-400 mt-1">This usually takes less than 24 hours.</p>
-          <button onClick={logOut} className="mt-6 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1.5 mx-auto">
-            <LogOut className="w-4 h-4" /> Sign Out
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Confirm step ───────────────────────────────────────────
+  // -- Confirm step -------------------------------------------
   if (selected) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -66,7 +49,7 @@ export default function ClaimWinery({ user }) {
               <Wine className="w-7 h-7 text-white" />
             </div>
             <h2 className="text-lg font-bold text-gray-900">Claim {selected.name}?</h2>
-            <p className="text-sm text-gray-400 mt-1">{selected.region} · {selected.price}</p>
+            <p className="text-sm text-gray-400 mt-1">{selected.region} &middot; {selected.price}</p>
           </div>
           <div className="bg-gray-50 rounded-xl p-4 mb-5">
             <p className="text-sm text-gray-600 leading-relaxed">
@@ -85,7 +68,7 @@ export default function ClaimWinery({ user }) {
     );
   }
 
-  // ── Winery list ────────────────────────────────────────────
+  // -- Winery list --------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg p-6">
@@ -110,7 +93,7 @@ export default function ClaimWinery({ user }) {
               </div>
               <div className="flex-1">
                 <div className="text-sm font-medium text-gray-900">{w.name}</div>
-                <div className="text-xs text-gray-400">{w.region} · {w.price}</div>
+                <div className="text-xs text-gray-400">{w.region} &middot; {w.price}</div>
               </div>
               <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
               <span className="text-sm text-gray-600">{w.rating}</span>
@@ -120,6 +103,18 @@ export default function ClaimWinery({ user }) {
             <div className="text-center py-8 text-gray-400 text-sm">No wineries match your search.</div>
           )}
         </div>
+
+        {/* Path B — winery not in list, add a new one */}
+        <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+          <p className="text-xs text-gray-400 mb-2">Can't find your winery?</p>
+          <button
+            onClick={onAddWinery}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700 transition"
+          >
+            <PlusCircle className="w-4 h-4" /> Add My Winery
+          </button>
+        </div>
+
         <button onClick={logOut} className="mt-4 text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1.5 mx-auto">
           <LogOut className="w-4 h-4" /> Sign Out
         </button>
