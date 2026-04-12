@@ -249,6 +249,11 @@ export async function submitWineryClaim(uid, email, wineryId, wineryName) {
   });
 }
 
+export async function getClaimStatus(uid) {
+  const snap = await getDoc(doc(db, "wineryClaims", uid));
+  return snap.exists() ? snap.data() : null;
+}
+
 export async function getPendingClaims() {
   const q = query(collection(db, "wineryClaims"), where("status", "==", "pending"), orderBy("submittedAt", "desc"));
   const snap = await getDocs(q);
