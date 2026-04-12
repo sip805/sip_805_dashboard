@@ -1,28 +1,29 @@
 // ==============================================================
 // App.jsx - Root state router for the Sip805 winery dashboard
 //
-// TWO-PATH ONBOARDING FLOW:
+// TWO-PATH ONBOARDING FLOW WITH REJECTION HANDLING:
 //
 //   1. Landing page (marketing + demo) - public, no auth
-//   2. Sign Up / Sign In - creates or authenticates Firebase user
-//   3. Auth check:
-//      a. wineryOwners/{uid} exists    -> APPROVED -> Dashboard
-//      b. wineryClaims/{uid} pending   -> ClaimPending
-//      c. winerySubmissions/{uid} pending -> SubmissionPending
-//      d. Neither -> ClaimWinery (two choices):
-//         Path A: select existing winery -> submit claim
-//         Path B: "Add My Winery" -> AddWinery form -> submission
+//   2. Sign Up / Sign In
+//   3. Auth check (via getOnboardingState):
+//      a. wineryOwners/{uid} approved     -> Dashboard
+//      b. wineryClaims/{uid} pending      -> ClaimPending
+//      c. wineryClaims/{uid} rejected     -> ClaimRejected
+//      d. winerySubmissions/{uid} pending  -> SubmissionPending
+//      e. winerySubmissions/{uid} rejected/needs_more_info -> SubmissionRejected
+//      f. No records                       -> ClaimWinery (two choices):
+//         Path A: select existing winery   -> submit claim
+//         Path B: "Add My Winery"          -> AddWinery form
 //   4. Dashboard - locked to the owner's approved winery
 //
-// Admin functions (approve/reject) live in the separate
-// sip805-admin app - nothing admin-related here.
+// Priority: approved owner > pending > rejected > fresh onboarding
+//
+// Admin functions live in the separate sip805-admin app.
 // ==============================================================
 
 import { useState, useEffect } from "react";
-import { Clock, LogOut as LogOutIcon, Mail } from "lucide-react";
 import {
-  onAuthChange, getOwnerProfile, getClaimStatus,
-  getSubmissionStatus, logOut
+  onAuthChange, getOnboardingState, logOut
 } from "./firebaseClient.js";
 import Landing from "./Landing.jsx";
 import SignUp from "./components/SignUp.jsx";
@@ -30,6 +31,9 @@ import SignIn from "./components/SignIn.jsx";
 import ClaimWinery from "./components/ClaimWinery.jsx";
 import AddWinery from "./components/AddWinery.jsx";
 import ClaimPending from "./components/ClaimPending.jsx";
+import ClaimRejected from "./components/ClaimRejected.jsx";
+import SubmissionPending from "./components/SubmissionPending.jsx";
+import SubmissionRejected from "./components/SubmissionRejected.jsx";
 import DashboardShell from "./components/DashboardShell.jsx";
 
 const SCREENS = {
@@ -40,55 +44,24 @@ const SCREENS = {
   CLAIM_WINERY: "claimWinery",
   ADD_WINERY: "addWinery",
   CLAIM_PENDING: "claimPending",
+  CLAIM_REJECTED: "claimRejected",
   SUBMISSION_PENDING: "submissionPending",
+  SUBMISSION_REJECTED: "submissionRejected",
   DASHBOARD: "dashboard",
 };
 
-// -- Inline pending screen for new-winery submissions --
-// Similar to ClaimPending but with copy specific to new submissions
-// (longer review time, different messaging).
-function SubmissionPending({ wineryName }) {
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-          <Clock className="w-8 h-8 text-blue-600" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900">Submission Under Review</h2>
-        <p className="text-sm text-gray-600 mt-4 leading-relaxed">
-          Your new winery submission for <span className="font-semibold">{wineryName}</span> is being reviewed.
-        </p>
-        <p className="text-xs text-gray-400 mt-2">
-          Our team will add your winery to the Sip805 platform and grant you dashboard access once approved.
-        </p>
-        <p className="text-xs text-gray-400 mt-1">New winery reviews usually take 1-3 business days.</p>
-        <div className="bg-gray-50 rounded-xl p-4 mt-6">
-          <p className="text-xs text-gray-500 leading-relaxed">Questions? Reach out to us:</p>
-          <a href="mailto:support@sip805.com" className="inline-flex items-center gap-1.5 text-sm text-purple-600 font-medium mt-2 hover:underline">
-            <Mail className="w-4 h-4" /> support@sip805.com
-          </a>
-        </div>
-        <button onClick={logOut} className="mt-6 flex items-center gap-1.5 mx-auto text-sm text-gray-500 hover:text-gray-700 transition">
-          <LogOutIcon className="w-4 h-4" /> Sign Out
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// -- Main App component --
 export default function App() {
   const [screen, setScreen] = useState(SCREENS.LANDING);
   const [user, setUser] = useState(null);
   const [ownerProfile, setOwnerProfile] = useState(null);
-  const [pendingName, setPendingName] = useState("");
+  const [onboardingData, setOnboardingData] = useState(null);
 
   useEffect(() => {
     const unsub = onAuthChange(async (firebaseUser) => {
       if (!firebaseUser) {
         setUser(null);
         setOwnerProfile(null);
-        setPendingName("");
+        setOnboardingData(null);
         if (![SCREENS.LANDING, SCREENS.SIGN_UP, SCREENS.SIGN_IN].includes(screen)) {
           setScreen(SCREENS.LANDING);
         }
@@ -99,40 +72,43 @@ export default function App() {
       setScreen(SCREENS.LOADING);
 
       try {
-        // 1. Approved owner? -> dashboard
-        const profile = await getOwnerProfile(firebaseUser.uid);
-        if (profile) {
-          setOwnerProfile(profile);
-          setScreen(SCREENS.DASHBOARD);
-          return;
-        }
+        const state = await getOnboardingState(firebaseUser.uid);
+        setOnboardingData(state.data);
 
-        // 2. Pending claim on existing winery?
-        const claim = await getClaimStatus(firebaseUser.uid);
-        if (claim && claim.status === "pending") {
-          setPendingName(claim.wineryName || "your winery");
-          setScreen(SCREENS.CLAIM_PENDING);
-          return;
+        switch (state.screen) {
+          case "dashboard":
+            setOwnerProfile(state.data);
+            setScreen(SCREENS.DASHBOARD);
+            break;
+          case "claimPending":
+            setScreen(SCREENS.CLAIM_PENDING);
+            break;
+          case "claimRejected":
+            setScreen(SCREENS.CLAIM_REJECTED);
+            break;
+          case "submissionPending":
+            setScreen(SCREENS.SUBMISSION_PENDING);
+            break;
+          case "submissionRejected":
+            setScreen(SCREENS.SUBMISSION_REJECTED);
+            break;
+          default:
+            setScreen(SCREENS.CLAIM_WINERY);
         }
-
-        // 3. Pending new-winery submission?
-        const sub = await getSubmissionStatus(firebaseUser.uid);
-        if (sub && sub.status === "pending") {
-          setPendingName(sub.wineryName || "your winery");
-          setScreen(SCREENS.SUBMISSION_PENDING);
-          return;
-        }
-
-        // 4. Nothing yet -> show claim / add winery screen
-        setScreen(SCREENS.CLAIM_WINERY);
       } catch (err) {
-        console.error("Error checking owner status:", err);
+        console.error("Error checking onboarding state:", err);
         setScreen(SCREENS.CLAIM_WINERY);
       }
     });
 
     return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Helper: retry from a rejected state -> back to onboarding
+  const handleRetry = () => {
+    setOnboardingData(null);
+    setScreen(SCREENS.CLAIM_WINERY);
+  };
 
   switch (screen) {
     case SCREENS.LANDING:
@@ -159,38 +135,51 @@ export default function App() {
         </div>
       );
 
-    // Path A - claim an existing winery (or branch to Path B)
+    // Path A: claim an existing winery (or branch to Path B)
     case SCREENS.CLAIM_WINERY:
       return (
         <ClaimWinery
           user={user}
           onAddWinery={() => setScreen(SCREENS.ADD_WINERY)}
-          onClaimSubmitted={(claimData) => {
-            setPendingName(claimData.wineryName || "your winery");
+          onClaimSubmitted={(data) => {
+            setOnboardingData({ wineryName: data.wineryName, status: "pending" });
             setScreen(SCREENS.CLAIM_PENDING);
           }}
         />
       );
 
-    // Path B - submit a brand-new winery
+    // Path B: submit a brand-new winery
     case SCREENS.ADD_WINERY:
       return (
         <AddWinery
           user={user}
           onBack={() => setScreen(SCREENS.CLAIM_WINERY)}
           onSubmitted={(data) => {
-            setPendingName(data.wineryName || "your winery");
+            setOnboardingData({ wineryName: data.wineryName, status: "pending" });
             setScreen(SCREENS.SUBMISSION_PENDING);
+          }}
+          onClaimExisting={(winery) => {
+            // User found a duplicate and wants to claim it instead
+            setScreen(SCREENS.CLAIM_WINERY);
           }}
         />
       );
 
+    // Pending screens
     case SCREENS.CLAIM_PENDING:
-      return <ClaimPending wineryName={pendingName} />;
+      return <ClaimPending claim={onboardingData} />;
 
     case SCREENS.SUBMISSION_PENDING:
-      return <SubmissionPending wineryName={pendingName} />;
+      return <SubmissionPending submission={onboardingData} />;
 
+    // Rejected screens
+    case SCREENS.CLAIM_REJECTED:
+      return <ClaimRejected claim={onboardingData} onRetry={handleRetry} />;
+
+    case SCREENS.SUBMISSION_REJECTED:
+      return <SubmissionRejected submission={onboardingData} onRetry={handleRetry} />;
+
+    // Dashboard: locked to approved owner
     case SCREENS.DASHBOARD:
       return <DashboardShell user={user} ownerProfile={ownerProfile} />;
 
