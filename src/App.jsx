@@ -5,8 +5,7 @@ import {
   Lock, Crown, Calendar, Clock, Filter, Download, Bell,
   MapPin, Zap, Target, PieChart, Activity, ChevronRight,
   Menu, X, ExternalLink, AlertCircle, CheckCircle,
-  Pencil, Upload, Image, Plus, Trash2, Save, Globe, Phone, Dog, Tag,
-  Shield, UserCheck, UserX, ClipboardList, RefreshCw
+  Pencil, Upload, Image, Plus, Trash2, Save, Globe, Phone, Dog, Tag
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart as RPieChart, Pie, Cell,
@@ -17,8 +16,7 @@ import {
   auth, signInWithGoogle, signInWithEmail, logOut, onAuthChange,
   getWineryProfile, createWineryProfile, getWineryVisits, getAllVisits,
   getWineryProfileEdits, saveWineryProfileEdits, uploadWineryPhoto, validateWineryEdits,
-  isAdmin, submitWineryClaim, getPendingClaims, getAllClaims,
-  approveClaim, rejectClaim, getAllWineryOwners, getRecentVisits, getPlatformStats
+  submitWineryClaim, getClaimStatus
 } from "./firebaseClient.js";
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -40,8 +38,8 @@ const EDITABLE_DEFAULTS = {
 const WINERIES = [
   { id: 1, name: "DAOU Family Estates", region: "Adelaida District", rating: 4.9, reviews: 1247, price: "$$$$", ...EDITABLE_DEFAULTS[1] },
   { id: 2, name: "Tablas Creek Vineyard", region: "Adelaida District", rating: 4.8, reviews: 876, price: "$$$", ...EDITABLE_DEFAULTS[2] },
-  { id: 3, name: "Adelaida Vineyards", region: "Adelaida District", rating: 4.7, reviews: 498, price: "$$$" },
-  { id: 4, name: "Calcareous Vineyard", region: "Adelaida District", rating: 4.7, reviews: 612, price: "$$$" },
+  { id: 3, name: "Adelaida Vineyards", region: "Adelaida District", rating: 4.7, reviews: 498, price: "$$$", ...EDITABLE_DEFAULTS[3] },
+  { id: 4, name: "Calcareous Vineyard", region: "Adelaida District", rating: 4.7, reviews: 612, price: "$$$", ...EDITABLE_DEFAULTS[4] },
   { id: 5, name: "Halter Ranch", region: "Adelaida District", rating: 4.7, reviews: 534, price: "$$$" },
   { id: 6, name: "Law Estate Wines", region: "Adelaida District", rating: 4.8, reviews: 367, price: "$$$$" },
   { id: 7, name: "Peachy Canyon Winery", region: "Adelaida District", rating: 4.6, reviews: 723, price: "$$" },
@@ -56,20 +54,20 @@ const WINERIES = [
   { id: 16, name: "Écluse Wines", region: "Willow Creek", rating: 4.6, reviews: 298, price: "$$$" },
   { id: 17, name: "Four Lanterns Winery", region: "Willow Creek", rating: 4.5, reviews: 189, price: "$$" },
   { id: 18, name: "Croad Vineyards", region: "Willow Creek", rating: 4.6, reviews: 231, price: "$$$" },
-  { id: 19, name: "Justin Vineyards", region: "West Paso Robles", rating: 4.8, reviews: 983, price: "$$$" },
+  { id: 19, name: "Justin Vineyards", region: "West Paso Robles", rating: 4.8, reviews: 983, price: "$$$", ...EDITABLE_DEFAULTS[19] },
   { id: 20, name: "Booker Vineyard", region: "West Paso Robles", rating: 4.8, reviews: 389, price: "$$$$" },
   { id: 21, name: "Austin Hope Winery", region: "Templeton Gap", rating: 4.7, reviews: 856, price: "$$$" },
   { id: 22, name: "Castoro Cellars", region: "Templeton Gap", rating: 4.5, reviews: 567, price: "$$" },
   { id: 23, name: "J Dusi Wines", region: "Templeton Gap", rating: 4.6, reviews: 345, price: "$$" },
   { id: 24, name: "Bella Luna Estate", region: "Templeton Gap", rating: 4.5, reviews: 234, price: "$$" },
   { id: 25, name: "Cass Winery", region: "Templeton Gap", rating: 4.6, reviews: 423, price: "$$$" },
-  { id: 26, name: "Giornata Wines", region: "Tin City", rating: 4.8, reviews: 312, price: "$$$" },
+  { id: 26, name: "Giornata Wines", region: "Tin City", rating: 4.8, reviews: 312, price: "$$$", ...EDITABLE_DEFAULTS[26] },
   { id: 27, name: "Sans Liege Wines", region: "Tin City", rating: 4.7, reviews: 287, price: "$$" },
   { id: 28, name: "ONX Wines", region: "Tin City", rating: 4.7, reviews: 256, price: "$$$" },
   { id: 29, name: "Turtle Rock Vineyards", region: "Tin City", rating: 4.6, reviews: 198, price: "$$" },
   { id: 30, name: "MCV Wines", region: "Tin City", rating: 4.5, reviews: 176, price: "$$" },
   { id: 31, name: "Cloak & Dagger Wines", region: "Tin City", rating: 4.6, reviews: 213, price: "$$" },
-  { id: 32, name: "LXV Wine", region: "Downtown Paso Robles", rating: 4.8, reviews: 534, price: "$$$" },
+  { id: 32, name: "LXV Wine", region: "Downtown Paso Robles", rating: 4.8, reviews: 534, price: "$$$", ...EDITABLE_DEFAULTS[32] },
   { id: 33, name: "Serial Wines", region: "Downtown Paso Robles", rating: 4.7, reviews: 312, price: "$$$" },
   { id: 34, name: "Bushong Vintage Co.", region: "Downtown Paso Robles", rating: 4.6, reviews: 198, price: "$$" },
   { id: 35, name: "Tank Garage Winery", region: "Downtown Paso Robles", rating: 4.6, reviews: 267, price: "$$" },
@@ -88,15 +86,83 @@ const WINERIES = [
   { id: 48, name: "Talley Vineyards", region: "Arroyo Grande", rating: 4.8, reviews: 567, price: "$$$" },
   { id: 49, name: "Laetitia Vineyard", region: "Arroyo Grande", rating: 4.6, reviews: 423, price: "$$$" },
   { id: 50, name: "Fess Parker Winery", region: "Santa Ynez Valley", rating: 4.7, reviews: 789, price: "$$$" },
+  { id: 51, name: "Stolpman Vineyards", region: "Santa Ynez Valley", rating: 4.8, reviews: 456, price: "$$$" },
+  { id: 52, name: "Brander Vineyard", region: "Santa Ynez Valley", rating: 4.5, reviews: 312, price: "$$" },
+  { id: 53, name: "Gainey Vineyard", region: "Santa Ynez Valley", rating: 4.5, reviews: 345, price: "$$" },
+  { id: 54, name: "Sunstone Winery", region: "Santa Ynez Valley", rating: 4.6, reviews: 423, price: "$$$" },
+  { id: 55, name: "Kalyra Winery", region: "Santa Ynez Valley", rating: 4.4, reviews: 267, price: "$$" },
+  { id: 56, name: "Carhartt Family Wines", region: "Los Olivos", rating: 4.7, reviews: 298, price: "$$" },
+  { id: 57, name: "Liquid Farm", region: "Sta. Rita Hills", rating: 4.7, reviews: 312, price: "$$$" },
+  { id: 58, name: "Camins 2 Dreams", region: "Sta. Rita Hills", rating: 4.6, reviews: 189, price: "$$" },
+  { id: 59, name: "Riverbench Vineyard", region: "Santa Maria Valley", rating: 4.6, reviews: 312, price: "$$" },
+  { id: 60, name: "Costa de Oro Winery", region: "Santa Maria Valley", rating: 4.5, reviews: 234, price: "$$" },
+  { id: 61, name: "Presqu'ile Winery", region: "Santa Maria Valley", rating: 4.8, reviews: 456, price: "$$$$" },
   { id: 62, name: "J. Lohr Vineyards", region: "Paso Robles", rating: 4.5, reviews: 678, price: "$$" },
   { id: 63, name: "Eberle Winery", region: "Paso Robles", rating: 4.6, reviews: 534, price: "$$" },
+  { id: 64, name: "HammerSky Vineyards", region: "Paso Robles", rating: 4.6, reviews: 345, price: "$$$" },
+  { id: 65, name: "Clavo Cellars", region: "Templeton", rating: 4.6, reviews: 312, price: "$$" },
+  { id: 66, name: "TRUSS Wines", region: "Willow Creek", rating: 4.7, reviews: 89, price: "$$$" },
+  { id: 67, name: "Hope Family Wines", region: "Paso Robles", rating: 4.6, reviews: 567, price: "$$" },
   { id: 68, name: "Opolo Vineyards", region: "Paso Robles", rating: 4.6, reviews: 1245, price: "$$" },
   { id: 69, name: "Vina Robles", region: "Paso Robles", rating: 4.6, reviews: 987, price: "$$" },
-  { id: 70, name: "Tobin James Cellars", region: "Paso Robles", rating: 4.7, reviews: 1567, price: "$$" },
+  { id: 70, name: "Tobin James Cellars", region: "Paso Robles", rating: 4.7, reviews: 1567, price: "$$", ...EDITABLE_DEFAULTS[70] },
   { id: 71, name: "Niner Wine Estates", region: "Paso Robles", rating: 4.7, reviews: 678, price: "$$$" },
   { id: 72, name: "L'Aventure Winery", region: "Paso Robles", rating: 4.8, reviews: 456, price: "$$$$" },
+  { id: 73, name: "Linne Calodo", region: "Paso Robles", rating: 4.7, reviews: 389, price: "$$$$" },
+  { id: 74, name: "Midnight Cellars", region: "Paso Robles", rating: 4.6, reviews: 423, price: "$$" },
+  { id: 75, name: "Dark Star Cellars", region: "Paso Robles", rating: 4.5, reviews: 312, price: "$$" },
+  { id: 76, name: "Ancient Peaks Winery", region: "Santa Margarita", rating: 4.6, reviews: 534, price: "$$" },
+  { id: 77, name: "Jada Vineyard", region: "Paso Robles", rating: 4.7, reviews: 267, price: "$$$" },
+  { id: 78, name: "Caliza Winery", region: "Paso Robles", rating: 4.7, reviews: 298, price: "$$$" },
   { id: 79, name: "Herman Story Wines", region: "Paso Robles", rating: 4.7, reviews: 345, price: "$$$" },
   { id: 80, name: "McPrice Myers", region: "Paso Robles", rating: 4.7, reviews: 278, price: "$$$" },
+  { id: 81, name: "Shale Oak Winery", region: "Paso Robles", rating: 4.5, reviews: 234, price: "$$" },
+  { id: 82, name: "Alta Colina Vineyard", region: "Paso Robles", rating: 4.7, reviews: 312, price: "$$$" },
+  { id: 83, name: "Le Vigne Winery", region: "Paso Robles", rating: 4.5, reviews: 345, price: "$$" },
+  { id: 84, name: "Bianchi Winery", region: "Paso Robles", rating: 4.5, reviews: 456, price: "$$" },
+  { id: 85, name: "CaliPaso Winery", region: "Paso Robles", rating: 4.5, reviews: 267, price: "$$" },
+  { id: 86, name: "Derby Wine Estates", region: "Paso Robles", rating: 4.6, reviews: 198, price: "$$" },
+  { id: 87, name: "Victor Hugo Vineyard", region: "Paso Robles", rating: 4.5, reviews: 234, price: "$$" },
+  { id: 88, name: "Wild Coyote Estate Winery", region: "Paso Robles", rating: 4.5, reviews: 189, price: "$$" },
+  { id: 89, name: "Villicana Winery", region: "Paso Robles", rating: 4.6, reviews: 167, price: "$$" },
+  { id: 90, name: "Parrish Family Vineyard", region: "Paso Robles", rating: 4.7, reviews: 178, price: "$$$" },
+  { id: 91, name: "Whalebone Vineyard", region: "Paso Robles", rating: 4.6, reviews: 156, price: "$$" },
+  { id: 92, name: "Le Cuvier Winery", region: "Paso Robles", rating: 4.6, reviews: 145, price: "$$$" },
+  { id: 93, name: "Jacob Toft Wines", region: "Paso Robles", rating: 4.6, reviews: 189, price: "$$" },
+  { id: 94, name: "Oso Libre Winery", region: "Paso Robles", rating: 4.6, reviews: 134, price: "$$" },
+  { id: 95, name: "Firestone Vineyard", region: "Santa Ynez Valley", rating: 4.5, reviews: 876, price: "$$" },
+  { id: 96, name: "Beckmen Vineyards", region: "Santa Ynez Valley", rating: 4.7, reviews: 456, price: "$$$" },
+  { id: 97, name: "Zaca Mesa Winery", region: "Santa Ynez Valley", rating: 4.5, reviews: 534, price: "$$" },
+  { id: 98, name: "Koehler Winery", region: "Santa Ynez Valley", rating: 4.5, reviews: 312, price: "$$" },
+  { id: 99, name: "Demetria Estate", region: "Santa Ynez Valley", rating: 4.8, reviews: 267, price: "$$$$" },
+  { id: 100, name: "Larner Vineyard", region: "Santa Ynez Valley", rating: 4.7, reviews: 198, price: "$$$" },
+  { id: 101, name: "Star Lane Vineyard", region: "Santa Ynez Valley", rating: 4.6, reviews: 234, price: "$$$" },
+  { id: 102, name: "Rusack Vineyards", region: "Santa Ynez Valley", rating: 4.6, reviews: 312, price: "$$$" },
+  { id: 103, name: "Rideau Vineyard", region: "Santa Ynez Valley", rating: 4.5, reviews: 289, price: "$$" },
+  { id: 104, name: "Alma Rosa Winery", region: "Sta. Rita Hills", rating: 4.6, reviews: 345, price: "$$$" },
+  { id: 105, name: "Buttonwood Farm Winery", region: "Santa Ynez Valley", rating: 4.6, reviews: 198, price: "$$" },
+  { id: 106, name: "Foxen Winery", region: "Santa Maria Valley", rating: 4.7, reviews: 456, price: "$$$" },
+  { id: 107, name: "Rancho Sisquoc Winery", region: "Santa Maria Valley", rating: 4.5, reviews: 234, price: "$$" },
+  { id: 108, name: "Sanford Winery", region: "Sta. Rita Hills", rating: 4.7, reviews: 378, price: "$$$" },
+  { id: 109, name: "Babcock Winery", region: "Sta. Rita Hills", rating: 4.6, reviews: 267, price: "$$$" },
+  { id: 110, name: "Grassini Family Vineyards", region: "Santa Ynez Valley", rating: 4.8, reviews: 312, price: "$$$$" },
+  { id: 111, name: "Center of Effort", region: "Edna Valley", rating: 4.7, reviews: 198, price: "$$$" },
+  { id: 112, name: "Sextant Wines", region: "San Luis Obispo", rating: 4.5, reviews: 234, price: "$$" },
+  { id: 113, name: "Kelsey See Canyon Vineyards", region: "San Luis Obispo", rating: 4.5, reviews: 267, price: "$$" },
+  { id: 114, name: "Autry Cellars", region: "Edna Valley", rating: 4.6, reviews: 156, price: "$$" },
+  { id: 115, name: "Melville Winery", region: "Sta. Rita Hills", rating: 4.7, reviews: 345, price: "$$$" },
+  { id: 116, name: "Foley Estates Vineyard", region: "Sta. Rita Hills", rating: 4.5, reviews: 289, price: "$$$" },
+  { id: 117, name: "Brewer-Clifton", region: "Sta. Rita Hills", rating: 4.7, reviews: 312, price: "$$$$" },
+  { id: 118, name: "Flying Goat Cellars", region: "Sta. Rita Hills", rating: 4.6, reviews: 178, price: "$$" },
+  { id: 119, name: "Fiddlehead Cellars", region: "Sta. Rita Hills", rating: 4.6, reviews: 198, price: "$$" },
+  { id: 120, name: "Palmina Wines", region: "Sta. Rita Hills", rating: 4.6, reviews: 167, price: "$$" },
+  { id: 121, name: "Montemar Wines", region: "Sta. Rita Hills", rating: 4.5, reviews: 89, price: "$$" },
+  { id: 122, name: "Ken Brown Wines", region: "Sta. Rita Hills", rating: 4.7, reviews: 156, price: "$$$" },
+  { id: 123, name: "Bien Nacido Estate", region: "Santa Maria Valley", rating: 4.6, reviews: 234, price: "$$$" },
+  { id: 124, name: "Cambria Estate Winery", region: "Santa Maria Valley", rating: 4.5, reviews: 567, price: "$$" },
+  { id: 125, name: "Andrew Murray Vineyards", region: "Santa Ynez Valley", rating: 4.6, reviews: 234, price: "$$$" },
+  { id: 126, name: "Byron Winery", region: "Santa Maria Valley", rating: 4.5, reviews: 345, price: "$$" },
+  { id: 127, name: "Dunites Wine Co.", region: "Edna Valley", rating: 4.6, reviews: 145, price: "$$" },
 ];
 
 const TRAILS = [
@@ -109,61 +175,66 @@ const TRAILS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════════
-   DEMO DATA GENERATOR — simulates analytics until real data builds up
+   DEMO DATA GENERATOR — simulates realistic analytics
    ═══════════════════════════════════════════════════════════════════ */
 
-function buildDataFromVisits(visits, wineryId) {
-  // Builds the same data shape from real Firestore visits.
-  // If visits is empty (app hasn't launched), everything will be zero.
+function generateDemoData(wineryId) {
   const now = new Date();
   const daily = [];
   const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, visitors: 0 }));
 
-  // Build a map of date → { visitors, checkIns, ratings }
-  const dayMap = {};
-  (visits || []).forEach(v => {
-    const d = v.date ? v.date.split("T")[0] : null;
-    if (!d) return;
-    if (!dayMap[d]) dayMap[d] = { visitors: 0, checkIns: 0, ratingSum: 0, ratingCount: 0 };
-    dayMap[d].visitors += 1;
-    if (v.checkedIn) dayMap[d].checkIns += 1;
-    if (v.rating) { dayMap[d].ratingSum += v.rating; dayMap[d].ratingCount += 1; }
-    // Hourly
-    const hour = new Date(v.date).getHours();
-    if (hour >= 0 && hour < 24) hourly[hour].visitors += 1;
-  });
-
-  // Generate 90 days of entries (real data or zeros)
+  // Generate 90 days of realistic demo data
   for (let d = 89; d >= 0; d--) {
     const date = new Date(now);
     date.setDate(date.getDate() - d);
     const key = date.toISOString().split("T")[0];
-    const entry = dayMap[key] || { visitors: 0, checkIns: 0, ratingSum: 0, ratingCount: 0 };
+    const dow = date.getDay();
+
+    // Simulate realistic traffic patterns
+    const baseVisitors = Math.floor(Math.random() * 150) + 50;
+    const weekendBoost = [0, 6].includes(dow) ? 1.3 : 0.9;
+    const visitors = Math.floor(baseVisitors * weekendBoost);
+    const checkIns = Math.floor(visitors * 0.45 + Math.random() * 20);
+
     daily.push({
       date: key,
       label: `${date.getMonth() + 1}/${date.getDate()}`,
-      visitors: entry.visitors,
-      checkIns: entry.checkIns,
-      avgRating: entry.ratingCount > 0 ? +(entry.ratingSum / entry.ratingCount).toFixed(1) : 0,
+      visitors,
+      checkIns,
+      avgRating: 4 + Math.random() * 1,
     });
   }
 
-  // Source breakdown (from real data — count by source field, or show zeros)
-  const sourceMap = {};
-  (visits || []).forEach(v => {
-    const src = v.source || "Sip805 App";
-    sourceMap[src] = (sourceMap[src] || 0) + 1;
-  });
+  // Hourly distribution (peak during 12-6pm)
+  for (let h = 0; h < 24; h++) {
+    if (h >= 11 && h <= 18) {
+      hourly[h].visitors = Math.floor(Math.random() * 40) + 30;
+    } else if (h >= 9 && h <= 21) {
+      hourly[h].visitors = Math.floor(Math.random() * 20) + 10;
+    } else {
+      hourly[h].visitors = Math.floor(Math.random() * 5);
+    }
+  }
+
+  // Traffic sources
   const sourceColors = { "Sip805 App": "#9333ea", "Google Maps": "#3b82f6", "Direct / Walk-in": "#16a34a", "Trail Route": "#f59e0b", "Social Media": "#ef4444" };
-  const sources = Object.keys(sourceColors).map(name => ({
-    name, value: sourceMap[name] || 0, color: sourceColors[name],
-  }));
+  const sources = [
+    { name: "Sip805 App", value: 800 + Math.floor(Math.random() * 400), color: sourceColors["Sip805 App"] },
+    { name: "Google Maps", value: 450 + Math.floor(Math.random() * 300), color: sourceColors["Google Maps"] },
+    { name: "Direct / Walk-in", value: 320 + Math.floor(Math.random() * 250), color: sourceColors["Direct / Walk-in"] },
+    { name: "Trail Route", value: 150 + Math.floor(Math.random() * 150), color: sourceColors["Trail Route"] },
+    { name: "Social Media", value: 120 + Math.floor(Math.random() * 100), color: sourceColors["Social Media"] },
+  ];
 
   // Rating distribution
-  const ratingBuckets = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-  (visits || []).forEach(v => { if (v.rating >= 1 && v.rating <= 5) ratingBuckets[Math.round(v.rating)] += 1; });
   const ratingColors = { 5: "#16a34a", 4: "#84cc16", 3: "#f59e0b", 2: "#f97316", 1: "#ef4444" };
-  const ratings = [5, 4, 3, 2, 1].map(s => ({ stars: s === 1 ? "1 star" : `${s} stars`, count: ratingBuckets[s], color: ratingColors[s] }));
+  const ratings = [
+    { stars: "5 stars", count: 380 + Math.floor(Math.random() * 150), color: ratingColors[5] },
+    { stars: "4 stars", count: 250 + Math.floor(Math.random() * 100), color: ratingColors[4] },
+    { stars: "3 stars", count: 90 + Math.floor(Math.random() * 50), color: ratingColors[3] },
+    { stars: "2 stars", count: 20 + Math.floor(Math.random() * 30), color: ratingColors[2] },
+    { stars: "1 star", count: 10 + Math.floor(Math.random() * 15), color: ratingColors[1] },
+  ];
 
   const last30 = daily.slice(-30);
   const prev30 = daily.slice(-60, -30);
@@ -402,201 +473,88 @@ const TrafficPage = ({ data, winery, tier }) => {
           })}
         </div>
       </div>
-
-      {/* Conversion Funnel — Premium */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5 relative">
-        <SectionHeader title="Conversion Funnel" subtitle="From app view → profile tap → check-in → review" />
-        {tier === "free" && <PremiumLock feature="See how visitors convert at each stage" />}
-        <div className="space-y-3 mt-4">
-          {[
-            { stage: "Saw on Map / List", pct: 100, count: data.kpi.visitors.value, color: "#9333ea" },
-            { stage: "Viewed Profile", pct: 64, count: Math.round(data.kpi.visitors.value * 0.64), color: "#7c3aed" },
-            { stage: "Visited (Check-in)", pct: parseFloat(checkInRate), count: data.kpi.checkIns.value, color: "#6d28d9" },
-            { stage: "Left a Rating", pct: parseFloat(checkInRate) * 0.6, count: Math.round(data.kpi.checkIns.value * 0.6), color: "#5b21b6" },
-          ].map(f => (
-            <div key={f.stage} className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-32">{f.stage}</span>
-              <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full flex items-center pl-2" style={{ width: `${Math.max(f.pct, 5)}%`, background: f.color }}>
-                  <span className="text-[10px] text-white font-medium">{f.count.toLocaleString()}</span>
-                </div>
-              </div>
-              <span className="text-xs font-medium text-gray-600 w-12 text-right">{f.pct.toFixed(0)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };
 
 // ── TRAILS PAGE ─────────────────────────────────────────────────
 const TrailsPage = ({ data, winery, tier }) => {
-  const myTrails = TRAILS.filter(t => t.stops.includes(winery.id));
-  const otherTrails = TRAILS.filter(t => !t.stops.includes(winery.id));
-
-  // Simulated trail-specific metrics
-  const trailMetrics = TRAILS.map(t => ({
-    ...t,
-    visitors: Math.round(80 + Math.random() * 200),
-    completionRate: +(60 + Math.random() * 35).toFixed(0),
-    avgStopsVisited: +(t.stops.length * (0.5 + Math.random() * 0.4)).toFixed(1),
-    yourPosition: t.stops.indexOf(winery.id) + 1,
-  }));
-
+  const wineryTrails = TRAILS.filter(t => t.stops.includes(winery.id));
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Trail Performance</h2>
-        <p className="text-sm text-gray-400 mt-1">See how trails drive traffic to your winery</p>
+        <h2 className="text-2xl font-bold text-gray-900">Trail Analytics</h2>
+        <p className="text-sm text-gray-400 mt-1">Featured wine trails and experiences</p>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard icon={Map} label="Your Trail Appearances" value={myTrails.length} color="purple" />
-        <KpiCard icon={Users} label="Trail Visitors (30d)" value={Math.round(data.kpi.visitors.value * 0.35)} color="blue" />
-        <KpiCard icon={Target} label="Trail Conversion" value="34" suffix="%" color="green" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <KpiCard icon={Map} label="Trail Appearances" value={wineryTrails.length} color="green" />
+        <KpiCard icon={Users} label="Trail-generated Visits (est.)" value={Math.floor(data.kpi.visitors.value * 0.15)} color="blue" />
+        <KpiCard icon={TrendingUp} label="Trail Conversion Rate" value="12.5" suffix="%" color="purple" />
       </div>
-
-      {/* Your Trails */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionHeader title="Trails Featuring Your Winery" subtitle={`You appear on ${myTrails.length} of ${TRAILS.length} trails`} />
-        {myTrails.length === 0 ? (
-          <div className="text-center py-8">
-            <Map className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-400">Your winery doesn't appear on any trails yet.</p>
-            <p className="text-xs text-gray-300 mt-1">Trails are curated based on location, region, and visitor data.</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {trailMetrics.filter(t => t.stops.includes(winery.id)).map(t => (
-              <div key={t.id} className="border border-gray-100 rounded-xl p-4 hover:border-purple-200 transition">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-900">{t.name}</span>
-                    <span className="text-xs text-gray-400 ml-2">Stop #{t.yourPosition} of {t.stops.length}</span>
-                  </div>
-                  <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full">{t.visitors} visitors/mo</span>
-                </div>
-                <div className="flex gap-6 text-xs text-gray-500">
-                  <span>Completion: {t.completionRate}%</span>
-                  <span>Avg stops visited: {t.avgStopsVisited}</span>
-                </div>
+        <SectionHeader title="Your Trails" subtitle="Wine trails featuring your winery" />
+        <div className="space-y-3">
+          {wineryTrails.length > 0 ? wineryTrails.map(trail => (
+            <div key={trail.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+              <div>
+                <div className="font-medium text-gray-900">{trail.name}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{trail.stops.length} stops</div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Trail Visitor Comparison — Premium */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5 relative">
-        <SectionHeader title="Trail Visitor Comparison" subtitle="Which trails drive the most traffic to your winery" />
-        {tier === "free" && <PremiumLock feature="Compare traffic from each trail with detailed breakdowns" />}
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trailMetrics.filter(t => t.stops.includes(winery.id))} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis type="number" tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#6b7280" }} tickLine={false} axisLine={false} width={150} />
-              <Tooltip contentStyle={{ borderRadius: 12 }} />
-              <Bar dataKey="visitors" fill="#9333ea" radius={[0, 6, 6, 0]} name="Monthly Visitors" />
-            </BarChart>
-          </ResponsiveContainer>
+              <button className="text-purple-600 hover:text-purple-700 text-sm font-medium flex items-center gap-1">View <ChevronRight className="w-4 h-4" /></button>
+            </div>
+          )) : (
+            <div className="text-center py-8 text-gray-400">
+              <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Not featured on any trails yet</p>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Not On These Trails */}
-      {otherTrails.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <SectionHeader title="Other Trails" subtitle="Trails you're not currently on" />
-          <div className="space-y-2">
-            {otherTrails.map(t => (
-              <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                <span className="text-sm text-gray-600">{t.name}</span>
-                <span className="text-xs text-gray-400">{t.stops.length} stops</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-// ── BENCHMARKING PAGE ───────────────────────────────────────────
+// ── BENCHMARK PAGE ──────────────────────────────────────────────
 const BenchmarkPage = ({ data, winery, tier }) => {
-  const regionWineries = WINERIES.filter(w => w.region === winery.region).sort((a, b) => b.rating - a.rating);
-  const allSorted = [...WINERIES].sort((a, b) => b.reviews - a.reviews);
-  const regionRank = regionWineries.findIndex(w => w.id === winery.id) + 1;
-  const overallRank = allSorted.findIndex(w => w.id === winery.id) + 1;
+  const wineryRegion = WINERIES.filter(w => w.region === winery.region);
+  const avgRegionVisitors = Math.round(wineryRegion.reduce((s, w) => s + 1200, 0) / wineryRegion.length);
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Competitive Benchmarking</h2>
-        <p className="text-sm text-gray-400 mt-1">See how you stack up against other wineries</p>
+        <h2 className="text-2xl font-bold text-gray-900">Benchmark</h2>
+        <p className="text-sm text-gray-400 mt-1">How you compare to other {winery.region} wineries</p>
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard icon={Award} label={`Rank in ${winery.region}`} value={`#${regionRank}`} suffix={` of ${regionWineries.length}`} color="purple" />
-        <KpiCard icon={TrendingUp} label="Overall Popularity Rank" value={`#${overallRank}`} suffix={` of ${WINERIES.length}`} color="blue" />
-        <KpiCard icon={Star} label="Your Rating" value={winery.rating} suffix=" / 5" color="amber" />
-      </div>
-
-      {/* Region Leaderboard */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionHeader title={`${winery.region} Leaderboard`} subtitle="Ranked by rating within your region" />
-        <div className="space-y-1">
-          {regionWineries.map((w, i) => (
-            <div key={w.id} className={`flex items-center gap-3 py-2.5 px-3 rounded-lg ${w.id === winery.id ? "bg-purple-50 border border-purple-200" : "hover:bg-gray-50"}`}>
-              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>
-                {i + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <span className={`text-sm ${w.id === winery.id ? "font-bold text-purple-700" : "text-gray-700"}`}>{w.name}</span>
-                {w.id === winery.id && <span className="text-[10px] ml-2 text-purple-500 font-medium">YOU</span>}
-              </div>
-              <div className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                <span className="text-sm font-medium text-gray-700">{w.rating}</span>
-              </div>
-              <span className="text-xs text-gray-400 w-16 text-right">{w.reviews.toLocaleString()} reviews</span>
-            </div>
-          ))}
+      {tier === "free" && (
+        <div className="relative bg-white rounded-2xl border border-gray-100 p-8">
+          <PremiumLock feature="Compare your performance against similar wineries in your region" />
+          <div className="space-y-4 opacity-50">
+            <KpiCard icon={TrendingUp} label="vs Regional Average" value="+18.5" suffix="%" color="green" />
+            <KpiCard icon={Star} label="Rating vs Peers" value="4.8" color="amber" />
+          </div>
         </div>
-      </div>
-
-      {/* Competitor Comparison — Premium */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5 relative">
-        <SectionHeader title="Head-to-Head Comparison" subtitle="Compare your metrics against specific competitors" />
-        {tier === "free" && <PremiumLock feature="Compare traffic, ratings, and trends vs. any competitor" />}
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={regionWineries.slice(0, 6).map(w => ({ name: w.name.length > 15 ? w.name.slice(0, 14) + "…" : w.name, reviews: w.reviews, rating: w.rating * 100 }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6b7280" }} tickLine={false} axisLine={false} angle={-20} textAnchor="end" height={60} />
-              <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 12 }} />
-              <Bar dataKey="reviews" fill="#9333ea" radius={[4, 4, 0, 0]} name="Reviews" />
-            </BarChart>
-          </ResponsiveContainer>
+      )}
+      {tier === "pro" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <KpiCard icon={TrendingUp} label="vs Regional Average" value="+18.5" suffix="%" color="green" />
+          <KpiCard icon={Star} label="Rating vs Peers" value="4.8" color="amber" />
         </div>
-      </div>
-
-      {/* Price Positioning */}
+      )}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <SectionHeader title="Price Positioning" subtitle="Where you sit in the market" />
-        <div className="grid grid-cols-4 gap-3 mt-2">
-          {["$$", "$$$", "$$$$"].map(p => {
-            const count = WINERIES.filter(w => w.price === p).length;
-            const isYou = winery.price === p;
-            return (
-              <div key={p} className={`text-center p-3 rounded-xl ${isYou ? "bg-purple-50 border-2 border-purple-300" : "bg-gray-50"}`}>
-                <div className={`text-lg font-bold ${isYou ? "text-purple-700" : "text-gray-600"}`}>{p}</div>
-                <div className="text-xs text-gray-400 mt-1">{count} wineries</div>
-                {isYou && <div className="text-[10px] text-purple-500 font-semibold mt-1">YOUR TIER</div>}
-              </div>
-            );
-          })}
+        <SectionHeader title={`${winery.region} Region Stats`} subtitle={`${wineryRegion.length} wineries`} />
+        <div className="space-y-3 mt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Regional Avg Visitors</span>
+            <span className="font-semibold text-gray-900">{avgRegionVisitors.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Your Visitors (30d)</span>
+            <span className="font-semibold text-gray-900">{data.kpi.visitors.value.toLocaleString()}</span>
+          </div>
+          <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700">Your Performance</span>
+            <span className="font-bold text-green-600">+{Math.round((data.kpi.visitors.value / avgRegionVisitors - 1) * 100)}%</span>
+          </div>
         </div>
       </div>
     </div>
@@ -605,706 +563,113 @@ const BenchmarkPage = ({ data, winery, tier }) => {
 
 // ── PROFILE EDITOR PAGE ─────────────────────────────────────────
 const ProfileEditorPage = ({ winery, user, tier }) => {
-  // Full winery data from WINERIES array (for defaults)
-  const defaults = WINERIES.find(w => w.id === winery.id) || winery;
-
-  const [desc, setDesc] = useState(defaults.desc || "");
-  const [phone, setPhone] = useState(defaults.phone || "");
-  const [hours, setHours] = useState(defaults.hours || "");
-  const [website, setWebsite] = useState(defaults.website || "");
-  const [dogFriendly, setDogFriendly] = useState(defaults.dogFriendly || false);
-  const [tags, setTags] = useState(defaults.tags || []);
-  const [newTag, setNewTag] = useState("");
-  const [experiences, setExperiences] = useState(
-    defaults.experiences || [{ name: "Tasting", duration: "45–60 min" }]
-  );
-  const [photoURL, setPhotoURL] = useState(null);
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-
-  const [errors, setErrors] = useState({});
+  const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
-  // Load existing overrides from Firestore
-  useEffect(() => {
-    (async () => {
-      const overrides = await getWineryProfileEdits(winery.id);
-      if (overrides) {
-        if (overrides.desc) setDesc(overrides.desc);
-        if (overrides.phone) setPhone(overrides.phone);
-        if (overrides.hours) setHours(overrides.hours);
-        if (overrides.website !== undefined) setWebsite(overrides.website);
-        if (overrides.dogFriendly !== undefined) setDogFriendly(overrides.dogFriendly);
-        if (overrides.tags) setTags(overrides.tags);
-        if (overrides.experiences) setExperiences(overrides.experiences);
-        if (overrides.photoURL) setPhotoURL(overrides.photoURL);
-      }
-      setLoaded(true);
-    })();
-  }, [winery.id]);
+  const defaults = EDITABLE_DEFAULTS[winery.id] || {};
+  const display = { ...defaults, ...edits };
+
+  const handleChange = (field, value) => {
+    setEdits(prev => ({ ...prev, [field]: value }));
+    setSaved(false);
+  };
 
   const handleSave = async () => {
     setSaving(true);
-    setSaved(false);
-    setErrors({});
-
-    const edits = { desc, phone, hours, website, dogFriendly, tags, experiences };
-    const result = await saveWineryProfileEdits(winery.id, edits, user?.uid);
-
-    if (!result.success) {
-      setErrors(result.errors);
-      setSaving(false);
-      return;
-    }
-
-    // Upload photo if selected
-    if (photoFile) {
-      setUploading(true);
-      const photoResult = await uploadWineryPhoto(winery.id, photoFile);
-      if (!photoResult.success) {
-        setErrors({ photo: photoResult.error });
-        setUploading(false);
-        setSaving(false);
-        return;
+    try {
+      const result = await saveWineryProfileEdits(winery.id, edits, user.uid);
+      if (result.success) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+        setEdits({});
       }
-      setPhotoURL(photoResult.url);
-      setPhotoFile(null);
-      setPhotoPreview(null);
-      setUploading(false);
+    } catch (e) {
+      alert("Error saving: " + e.message);
     }
-
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
   };
 
-  const handlePhotoSelect = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
-    setErrors(prev => ({ ...prev, photo: undefined }));
-  };
-
-  const addTag = () => {
-    const t = newTag.trim();
-    if (t && tags.length < 3 && !tags.includes(t)) {
-      setTags([...tags, t]);
-      setNewTag("");
+    try {
+      const result = await uploadWineryPhoto(winery.id, file);
+      if (result.success) {
+        alert("Photo uploaded!");
+      } else {
+        alert("Error: " + result.error);
+      }
+    } catch (e) {
+      alert("Upload failed: " + e.message);
     }
   };
-
-  const removeTag = (i) => setTags(tags.filter((_, idx) => idx !== i));
-
-  const updateExp = (i, field, val) => {
-    const updated = [...experiences];
-    updated[i] = { ...updated[i], [field]: val };
-    setExperiences(updated);
-  };
-
-  const addExp = () => {
-    if (experiences.length < 5) setExperiences([...experiences, { name: "", duration: "" }]);
-  };
-
-  const removeExp = (i) => {
-    if (experiences.length > 1) setExperiences(experiences.filter((_, idx) => idx !== i));
-  };
-
-  if (!loaded) return <div className="flex items-center justify-center py-20"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>;
-
-  const FieldError = ({ field }) => errors[field] ? <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors[field]}</p> : null;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Edit Profile</h2>
-          <p className="text-sm text-gray-400 mt-1">Update how your winery appears in the Sip805 app</p>
-        </div>
-        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-purple-600 text-white font-semibold px-5 py-2.5 rounded-xl hover:bg-purple-700 transition disabled:opacity-50">
-          {saving ? (uploading ? "Uploading photo..." : "Saving...") : saved ? <><CheckCircle className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save Changes</>}
-        </button>
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Edit Profile</h2>
+        <p className="text-sm text-gray-400 mt-1">Customize your winery listing on Sip805</p>
       </div>
 
-      {/* Locked fields notice */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-        <Lock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-amber-800">Some fields are managed by Sip805</p>
-          <p className="text-xs text-amber-600 mt-0.5">Winery name, region, price tier, ratings, and trail placement are locked to protect listing integrity. Contact us to request changes.</p>
+      {saved && (
+        <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 p-3 rounded-lg">
+          <CheckCircle className="w-4 h-4" /> Changes saved!
         </div>
-      </div>
-
-      {/* Photo */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Image className="w-4 h-4 text-purple-600" />
-          <h3 className="text-base font-semibold text-gray-900">Hero Photo</h3>
-        </div>
-        <div className="flex items-start gap-4">
-          <div className="w-48 h-32 rounded-xl bg-gray-100 overflow-hidden flex items-center justify-center border-2 border-dashed border-gray-200">
-            {(photoPreview || photoURL) ? (
-              <img src={photoPreview || photoURL} alt="Winery" className="w-full h-full object-cover" />
-            ) : (
-              <div className="text-center">
-                <Image className="w-8 h-8 text-gray-300 mx-auto mb-1" />
-                <p className="text-xs text-gray-400">No photo yet</p>
-              </div>
-            )}
-          </div>
-          <div className="flex-1">
-            <label className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg cursor-pointer transition">
-              <Upload className="w-4 h-4" /> Upload Photo
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoSelect} className="hidden" />
-            </label>
-            <p className="text-xs text-gray-400 mt-2">JPG, PNG, or WebP. Min 400x300px. Max 5 MB.</p>
-            <p className="text-xs text-gray-400">This replaces the gradient on your profile card.</p>
-            <FieldError field="photo" />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Description */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Pencil className="w-4 h-4 text-purple-600" />
-          <h3 className="text-base font-semibold text-gray-900">Description</h3>
-        </div>
-        <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={4} maxLength={500} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none resize-none" placeholder="Describe your winery..." />
-        <div className="flex items-center justify-between mt-1">
-          <FieldError field="desc" />
-          <span className={`text-xs ${desc.length > 450 ? "text-amber-500" : "text-gray-400"}`}>{desc.length}/500</span>
-        </div>
+        <label className="text-sm font-semibold text-gray-900 block mb-2">Description (20-500 chars)</label>
+        <textarea value={display.desc || ""} onChange={e => handleChange("desc", e.target.value)} rows={4} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none resize-none" />
+        <div className="text-xs text-gray-400 mt-1">{(display.desc || "").length} characters</div>
       </div>
 
       {/* Contact Info */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Phone className="w-4 h-4 text-purple-600" />
-          <h3 className="text-base font-semibold text-gray-900">Contact & Hours</h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Contact Information</h3>
+        <div className="space-y-4">
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Phone Number</label>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="(805) 555-1234" />
-            <FieldError field="phone" />
+            <label className="text-xs font-medium text-gray-600 block mb-1">Phone</label>
+            <input type="text" value={display.phone || ""} onChange={e => handleChange("phone", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="(XXX) XXX-XXXX" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 block mb-1">Website</label>
-            <input type="text" value={website} onChange={e => setWebsite(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="yourwinery.com" />
-            <FieldError field="website" />
+            <label className="text-xs font-medium text-gray-600 block mb-1">Website</label>
+            <input type="text" value={display.website || ""} onChange={e => handleChange("website", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="yourwinery.com" />
           </div>
-          <div className="sm:col-span-2">
-            <label className="text-xs text-gray-500 block mb-1">Hours</label>
-            <input type="text" value={hours} onChange={e => setHours(e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="Daily 10 AM – 5 PM" />
-            <FieldError field="hours" />
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Hours</label>
+            <input type="text" value={display.hours || ""} onChange={e => handleChange("hours", e.target.value)} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" placeholder="Daily 10 AM - 5 PM" />
           </div>
         </div>
       </div>
 
-      {/* Dog Friendly Toggle */}
+      {/* Attributes */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Dog className="w-5 h-5 text-purple-600" />
-            <div>
-              <h3 className="text-base font-semibold text-gray-900">Dog Friendly</h3>
-              <p className="text-xs text-gray-400">Allow your winery to appear on the Dog-Friendly Trail</p>
-            </div>
-          </div>
-          <button onClick={() => setDogFriendly(!dogFriendly)} className={`w-12 h-7 rounded-full transition-colors flex items-center px-1 ${dogFriendly ? "bg-purple-600" : "bg-gray-200"}`}>
-            <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${dogFriendly ? "translate-x-5" : "translate-x-0"}`} />
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Attributes</h3>
+        <div className="flex items-center gap-3">
+          <button className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${display.dogFriendly ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"}`} onClick={() => handleChange("dogFriendly", !display.dogFriendly)}>
+            <Dog className="w-4 h-4" /> Dog Friendly
           </button>
         </div>
       </div>
 
       {/* Tags */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Tag className="w-4 h-4 text-purple-600" />
-          <h3 className="text-base font-semibold text-gray-900">Tags</h3>
-          <span className="text-xs text-gray-400">({tags.length}/3)</span>
-        </div>
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Tags (up to 3)</h3>
         <div className="flex flex-wrap gap-2 mb-3">
-          {tags.map((t, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 text-sm font-medium px-3 py-1.5 rounded-lg">
-              {t}
-              <button onClick={() => removeTag(i)} className="hover:text-red-500 transition"><X className="w-3.5 h-3.5" /></button>
-            </span>
-          ))}
-        </div>
-        {tags.length < 3 && (
-          <div className="flex gap-2">
-            <input type="text" value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addTag())} maxLength={25} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-purple-400 outline-none" placeholder="Add a tag..." />
-            <button onClick={addTag} disabled={!newTag.trim()} className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition disabled:opacity-40"><Plus className="w-4 h-4" /></button>
-          </div>
-        )}
-        <FieldError field="tags" />
-      </div>
-
-      {/* Experiences */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Wine className="w-4 h-4 text-purple-600" />
-            <h3 className="text-base font-semibold text-gray-900">Experiences</h3>
-          </div>
-          {experiences.length < 5 && (
-            <button onClick={addExp} className="flex items-center gap-1 text-xs text-purple-600 font-medium hover:text-purple-700"><Plus className="w-3.5 h-3.5" /> Add</button>
-          )}
-        </div>
-        <div className="space-y-3">
-          {experiences.map((exp, i) => (
-            <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-              <div className="flex-1 grid grid-cols-2 gap-2">
-                <input type="text" value={exp.name} onChange={e => updateExp(i, "name", e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-purple-400 outline-none bg-white" placeholder="Experience name" />
-                <input type="text" value={exp.duration} onChange={e => updateExp(i, "duration", e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-purple-400 outline-none bg-white" placeholder="e.g. 45–60 min" />
-              </div>
-              {experiences.length > 1 && (
-                <button onClick={() => removeExp(i)} className="text-gray-400 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
-              )}
+          {(display.tags || []).map((tag, i) => (
+            <div key={i} className="flex items-center gap-1.5 bg-purple-50 text-purple-700 text-xs font-medium px-2.5 py-1.5 rounded-lg">
+              {tag} <button onClick={() => handleChange("tags", display.tags.filter((_, j) => j !== i))} className="hover:text-purple-900"><X className="w-3 h-3" /></button>
             </div>
           ))}
         </div>
-        <FieldError field="experiences" />
       </div>
 
-      {/* Preview */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">Live Preview</h3>
-        <div className="max-w-sm mx-auto bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="h-36 relative" style={{ background: photoURL || photoPreview ? "none" : (defaults.gradient || "linear-gradient(135deg, #1a0533, #6b2fa0)") }}>
-            {(photoURL || photoPreview) && <img src={photoPreview || photoURL} alt="" className="w-full h-full object-cover" />}
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/70">
-              <h4 className="text-white font-bold text-lg">{defaults.name}</h4>
-              <div className="flex items-center gap-2 text-white/80 text-xs">
-                <MapPin className="w-3 h-3" /> {defaults.region}
-                <span>·</span>
-                <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> {defaults.rating}
-                <span>·</span>
-                {defaults.price}
-              </div>
-            </div>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <Clock className="w-3 h-3" /> {hours || "Hours not set"}
-              <span className="mx-1">·</span>
-              <Phone className="w-3 h-3" /> {phone || "No phone"}
-            </div>
-            <p className="text-sm text-gray-600 leading-relaxed">{desc || "No description yet."}</p>
-            <div className="flex flex-wrap gap-1.5">
-              {tags.map((t, i) => <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{t}</span>)}
-            </div>
-            <div className="border-t border-gray-100 pt-3 space-y-2">
-              <p className="text-xs font-semibold text-gray-700">Experiences</p>
-              {experiences.filter(e => e.name).map((e, i) => (
-                <div key={i} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-sm text-gray-700">{e.name}</span>
-                  <span className="text-xs text-purple-600">{e.duration}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom save button */}
-      <button onClick={handleSave} disabled={saving} className="w-full flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-4 rounded-2xl hover:bg-purple-700 transition disabled:opacity-50">
-        {saving ? "Saving..." : saved ? <><CheckCircle className="w-5 h-5" /> Changes Saved — Live in App!</> : <><Save className="w-5 h-5" /> Save & Publish to Sip805 App</>}
+      {/* Save Button */}
+      <button onClick={handleSave} disabled={saving || Object.keys(edits).length === 0} className="w-full bg-purple-600 text-white font-semibold py-3 rounded-lg hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2">
+        <Save className="w-4 h-4" /> {saving ? "Saving..." : "Save Changes"}
       </button>
-    </div>
-  );
-};
-
-// ══════════════════════════════════════════════════════════════════
-// ADMIN PAGES — only visible to admin emails
-// ══════════════════════════════════════════════════════════════════
-
-// ── ADMIN OVERVIEW ──────────────────────────────────────────────
-const AdminOverviewPage = () => {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const s = await getPlatformStats();
-      setStats(s);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, []);
-
-  if (loading || !stats) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Admin Overview</h2>
-          <p className="text-sm text-gray-400 mt-1">Platform-wide statistics</p>
-        </div>
-        <button onClick={load} className="flex items-center gap-2 text-xs text-purple-600 font-medium hover:text-purple-700"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center mb-3"><Users className="w-5 h-5 text-purple-600" /></div>
-          <div className="text-2xl font-bold text-gray-900">{stats.totalOwners}</div>
-          <div className="text-xs text-gray-400">Registered Owners</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-3"><ClipboardList className="w-5 h-5 text-amber-600" /></div>
-          <div className="text-2xl font-bold text-gray-900">{stats.pendingClaims}</div>
-          <div className="text-xs text-gray-400">Pending Claims</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center mb-3"><CheckCircle className="w-5 h-5 text-blue-600" /></div>
-          <div className="text-2xl font-bold text-gray-900">{stats.totalCheckIns}</div>
-          <div className="text-xs text-gray-400">Total Check-ins</div>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
-          <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-3"><Wine className="w-5 h-5 text-green-600" /></div>
-          <div className="text-2xl font-bold text-gray-900">{WINERIES.length}</div>
-          <div className="text-xs text-gray-400">Wineries in Database</div>
-        </div>
-      </div>
-
-      {/* Recent Check-ins */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">Recent Check-ins</h3>
-        {stats.recentVisits.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">No check-ins yet. They'll appear here once users start visiting wineries.</p>
-        ) : (
-          <div className="space-y-2">
-            {stats.recentVisits.slice(0, 10).map((v, i) => {
-              const w = WINERIES.find(x => x.id === v.wineryId);
-              return (
-                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">
-                  <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center"><Wine className="w-4 h-4 text-purple-600" /></div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{w?.name || `Winery #${v.wineryId}`}</div>
-                    <div className="text-xs text-gray-400">{v.wineryName || ""}</div>
-                  </div>
-                  {v.rating && <div className="flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400" /><span className="text-xs font-medium">{v.rating}</span></div>}
-                  <span className="text-[10px] text-gray-400">{v.date ? new Date(v.date).toLocaleDateString() : ""}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ── ADMIN CLAIMS PAGE ───────────────────────────────────────────
-const AdminClaimsPage = () => {
-  const [claims, setClaims] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("pending");
-  const [processing, setProcessing] = useState(null);
-  const [rejectReason, setRejectReason] = useState("");
-  const [showRejectModal, setShowRejectModal] = useState(null);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const c = filter === "pending" ? await getPendingClaims() : await getAllClaims();
-      setClaims(c);
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
-
-  useEffect(() => { load(); }, [filter]);
-
-  const handleApprove = async (uid) => {
-    setProcessing(uid);
-    try {
-      await approveClaim(uid);
-      setClaims(prev => prev.map(c => c.id === uid ? { ...c, status: "approved" } : c));
-    } catch (e) { alert("Error: " + e.message); }
-    setProcessing(null);
-  };
-
-  const handleReject = async () => {
-    if (!showRejectModal) return;
-    setProcessing(showRejectModal);
-    try {
-      await rejectClaim(showRejectModal, rejectReason);
-      setClaims(prev => prev.map(c => c.id === showRejectModal ? { ...c, status: "rejected" } : c));
-    } catch (e) { alert("Error: " + e.message); }
-    setProcessing(null);
-    setShowRejectModal(null);
-    setRejectReason("");
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Winery Claims</h2>
-          <p className="text-sm text-gray-400 mt-1">Review and approve winery ownership requests</p>
-        </div>
-        <button onClick={load} className="flex items-center gap-2 text-xs text-purple-600 font-medium hover:text-purple-700"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
-      </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
-        {["pending", "all"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-4 py-2 rounded-md text-sm font-medium transition ${filter === f ? "bg-white shadow-sm text-gray-900" : "text-gray-500"}`}>
-            {f === "pending" ? "Pending" : "All Claims"}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
-      ) : claims.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-gray-700">No {filter === "pending" ? "pending" : ""} claims</h3>
-          <p className="text-sm text-gray-400 mt-1">{filter === "pending" ? "All claims have been reviewed." : "No one has claimed a winery yet."}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {claims.map(claim => {
-            const w = WINERIES.find(x => x.id === claim.wineryId);
-            return (
-              <div key={claim.id} className="bg-white rounded-2xl border border-gray-100 p-5">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0">
-                    <Wine className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-gray-900">{claim.wineryName || w?.name || `Winery #${claim.wineryId}`}</span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        claim.status === "pending" ? "bg-amber-50 text-amber-600" :
-                        claim.status === "approved" ? "bg-green-50 text-green-600" :
-                        "bg-red-50 text-red-600"
-                      }`}>{claim.status.toUpperCase()}</span>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      <span className="font-medium text-gray-600">{claim.email}</span>
-                      {claim.submittedAt?.toDate && <span> · Submitted {claim.submittedAt.toDate().toLocaleDateString()}</span>}
-                    </div>
-                    {w && <div className="text-xs text-gray-400 mt-0.5">{w.region} · {w.rating} stars · {w.reviews} reviews</div>}
-                    {claim.rejectionReason && <div className="text-xs text-red-400 mt-1">Reason: {claim.rejectionReason}</div>}
-                  </div>
-                  {claim.status === "pending" && (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleApprove(claim.id)}
-                        disabled={processing === claim.id}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-xs font-semibold rounded-lg hover:bg-green-700 transition disabled:opacity-50"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" /> Approve
-                      </button>
-                      <button
-                        onClick={() => setShowRejectModal(claim.id)}
-                        disabled={processing === claim.id}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-50 transition disabled:opacity-50"
-                      >
-                        <UserX className="w-3.5 h-3.5" /> Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <h3 className="text-base font-bold text-gray-900 mb-3">Reject Claim</h3>
-            <p className="text-sm text-gray-500 mb-4">Optionally provide a reason for rejection.</p>
-            <textarea
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-purple-400 outline-none resize-none mb-4"
-              placeholder="Reason (optional)..."
-            />
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => { setShowRejectModal(null); setRejectReason(""); }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-              <button onClick={handleReject} disabled={processing} className="px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition disabled:opacity-50">
-                Reject Claim
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── ADMIN WINERIES PAGE ─────────────────────────────────────────
-const AdminWineriesPage = () => {
-  const [owners, setOwners] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const o = await getAllWineryOwners();
-        setOwners(o);
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    })();
-  }, []);
-
-  // Merge owners with winery data
-  const enriched = WINERIES.map(w => {
-    const owner = owners.find(o => o.wineryId === w.id);
-    return { ...w, owner };
-  }).filter(w =>
-    !search || w.name.toLowerCase().includes(search.toLowerCase()) || w.region.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const claimed = enriched.filter(w => w.owner);
-  const unclaimed = enriched.filter(w => !w.owner);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">All Wineries</h2>
-        <p className="text-sm text-gray-400 mt-1">{WINERIES.length} wineries in database · {owners.length} claimed</p>
-      </div>
-
-      <input
-        type="text"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
-        placeholder="Search wineries..."
-      />
-
-      {loading ? (
-        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
-      ) : (
-        <>
-          {/* Claimed wineries */}
-          {claimed.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><UserCheck className="w-4 h-4 text-green-600" /> Claimed ({claimed.length})</h3>
-              <div className="space-y-2">
-                {claimed.map(w => (
-                  <div key={w.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center" style={{ background: w.gradient || "linear-gradient(135deg, #1a0533, #6b2fa0)" }}>
-                      <Wine className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900">{w.name}</div>
-                      <div className="text-xs text-gray-400">{w.region} · {w.price}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-xs font-medium text-green-600">{w.owner.email}</div>
-                      <div className="text-[10px] text-gray-400">{w.owner.tier || "free"} plan</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Unclaimed wineries */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><Wine className="w-4 h-4 text-gray-400" /> Unclaimed ({unclaimed.length})</h3>
-            <div className="space-y-1">
-              {unclaimed.map(w => (
-                <div key={w.id} className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50">
-                  <div className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center bg-gray-100">
-                    <Wine className="w-3.5 h-3.5 text-gray-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-700">{w.name}</div>
-                    <div className="text-xs text-gray-400">{w.region}</div>
-                  </div>
-                  <div className="flex items-center gap-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400" /><span className="text-xs">{w.rating}</span></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-// ── ADMIN USERS PAGE ────────────────────────────────────────────
-const AdminUsersPage = () => {
-  const [visits, setVisits] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const v = await getRecentVisits(200);
-        setVisits(v);
-      } catch (e) { console.error(e); }
-      setLoading(false);
-    })();
-  }, []);
-
-  // Group by user
-  const userMap = {};
-  visits.forEach(v => {
-    const uid = v.userId || v.uid || "anonymous";
-    if (!userMap[uid]) userMap[uid] = { uid, visits: [], wineries: new Set() };
-    userMap[uid].visits.push(v);
-    userMap[uid].wineries.add(v.wineryId);
-  });
-  const users = Object.values(userMap).sort((a, b) => b.visits.length - a.visits.length);
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">App Users</h2>
-        <p className="text-sm text-gray-400 mt-1">Users who have checked in via the Sip805 app</p>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center h-40"><div className="animate-spin w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full" /></div>
-      ) : users.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
-          <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-gray-700">No user activity yet</h3>
-          <p className="text-sm text-gray-400 mt-1">Check-ins from the consumer app will appear here.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-gray-50 border-b border-gray-100 text-xs font-semibold text-gray-500">
-            <div className="col-span-4">User</div>
-            <div className="col-span-2 text-center">Check-ins</div>
-            <div className="col-span-3 text-center">Unique Wineries</div>
-            <div className="col-span-3 text-right">Last Active</div>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {users.map((u, i) => (
-              <div key={i} className="grid grid-cols-12 gap-3 px-5 py-3 items-center hover:bg-gray-50">
-                <div className="col-span-4">
-                  <div className="text-sm font-medium text-gray-900 truncate">{u.visits[0]?.userName || u.uid.slice(0, 12) + "..."}</div>
-                  <div className="text-[10px] text-gray-400 truncate">{u.uid}</div>
-                </div>
-                <div className="col-span-2 text-center text-sm font-semibold text-gray-900">{u.visits.length}</div>
-                <div className="col-span-3 text-center text-sm text-gray-600">{u.wineries.size}</div>
-                <div className="col-span-3 text-right text-xs text-gray-400">{u.visits[0]?.date ? new Date(u.visits[0].date).toLocaleDateString() : "—"}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -1464,21 +829,39 @@ const LoginScreen = ({ onLogin }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════
+   PENDING CLAIM SCREEN
+   ═══════════════════════════════════════════════════════════════════ */
+
+const PendingClaimScreen = ({ wineryName, onLogout }) => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+      <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+        <Clock className="w-8 h-8 text-amber-600" />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900">Claim Under Review</h2>
+      <p className="text-sm text-gray-600 mt-4 leading-relaxed">
+        Your claim for <span className="font-semibold">{wineryName}</span> has been submitted and is being reviewed.
+      </p>
+      <p className="text-xs text-gray-400 mt-2">You'll get access once approved.</p>
+      <p className="text-xs text-gray-400 mt-4">This usually takes less than 24 hours.</p>
+      <button onClick={onLogout} className="w-full mt-6 py-2.5 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 transition">
+        Sign Out
+      </button>
+    </div>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════════
    WINERY SELECTOR (post-login, if no winery profile yet)
    ═══════════════════════════════════════════════════════════════════ */
 
-const WinerySelector = ({ user, onSelect, isAdminUser }) => {
+const WinerySelector = ({ user, onSelect }) => {
   const [search, setSearch] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [selectedClaim, setSelectedClaim] = useState(null);
   const filtered = WINERIES.filter(w => w.name.toLowerCase().includes(search.toLowerCase()) || w.region.toLowerCase().includes(search.toLowerCase()));
 
-  const handleClaim = async (w) => {
-    if (isAdminUser) {
-      // Admins bypass the claim flow
-      onSelect(w);
-      return;
-    }
+  const handleClaim = (w) => {
     setSelectedClaim(w);
   };
 
@@ -1539,8 +922,8 @@ const WinerySelector = ({ user, onSelect, isAdminUser }) => {
       <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg p-6">
         <div className="text-center mb-6">
           <Wine className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-          <h2 className="text-xl font-bold text-gray-900">{isAdminUser ? "Select a Winery" : "Claim Your Winery"}</h2>
-          <p className="text-sm text-gray-400 mt-1">{isAdminUser ? "Admin: select any winery to view its dashboard" : "Select the winery you own or manage"}</p>
+          <h2 className="text-xl font-bold text-gray-900">Claim Your Winery</h2>
+          <p className="text-sm text-gray-400 mt-1">Select the winery you own or manage</p>
         </div>
         <input
           type="text"
@@ -1577,60 +960,65 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [winery, setWinery] = useState(null);
+  const [claimStatus, setClaimStatus] = useState(null); // null | "pending" | "none"
+  const [claimWineryName, setClaimWineryName] = useState("");
   const [page, setPage] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const tier = "free"; // TODO: read from Firestore profile
-  const adminUser = user && isAdmin(user);
-
-  const [wineryVisits, setWineryVisits] = useState([]);
-  const [wineryDropdownOpen, setWineryDropdownOpen] = useState(false);
-  const [winerySearch, setWinerySearch] = useState("");
 
   useEffect(() => {
     const unsub = onAuthChange(async (u) => {
       setUser(u);
       if (u) {
         setShowDashboard(true);
+        // Check if they have an approved winery profile
         const profile = await getWineryProfile(u.uid);
         if (profile?.wineryId) {
           const w = WINERIES.find(x => x.id === profile.wineryId);
           if (w) setWinery(w);
+        } else {
+          // Check for pending claim
+          const claimDoc = await getClaimStatus(u.uid);
+          if (claimDoc && claimDoc.status === "pending") {
+            setClaimStatus("pending");
+            setClaimWineryName(claimDoc.wineryName || "");
+          } else {
+            setClaimStatus("none");
+          }
         }
-        // Admin: don't auto-select — let them pick from dropdown or stay on admin pages
       }
       setAuthLoading(false);
     });
     return unsub;
   }, []);
 
-  // Fetch real visits when winery changes
-  useEffect(() => {
-    if (!winery) { setWineryVisits([]); return; }
-    getWineryVisits(winery.id).then(setWineryVisits).catch(() => setWineryVisits([]));
-  }, [winery?.id]);
-
   const handleSelectWinery = async (w) => {
     setWinery(w);
-    setWineryDropdownOpen(false);
-    setWinerySearch("");
-    if (user && isAdmin(user)) {
-      // Admin: just select, don't create a claim
-    }
-    // Switch to overview when a winery is selected
-    if (!page.startsWith("admin")) setPage("overview");
+    setPage("overview");
   };
 
   const handleLogout = async () => {
     await logOut();
     setUser(null);
     setWinery(null);
+    setClaimStatus(null);
     setPage("overview");
     setShowDashboard(false);
   };
 
-  // Build analytics from real Firestore visits (zeros until app launches)
-  const data = useMemo(() => winery ? buildDataFromVisits(wineryVisits, winery.id) : null, [wineryVisits, winery?.id]);
+  // Generate demo data for the winery
+  const data = useMemo(() => winery ? generateDemoData(winery.id) : null, [winery?.id]);
+
+  // Nav items for winery dashboard
+  const navItems = [
+    { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "traffic", label: "Traffic", icon: Activity },
+    { id: "trails", label: "Trails", icon: Map },
+    { id: "benchmark", label: "Benchmark", icon: Award },
+    { id: "profile", label: "Edit Profile", icon: Pencil },
+    { id: "settings", label: "Settings", icon: Settings },
+  ];
 
   if (authLoading) {
     return (
@@ -1644,33 +1032,10 @@ export default function App() {
   if (!showDashboard && !user) return <Landing onEnterDashboard={() => setShowDashboard(true)} />;
 
   if (!user) return <LoginScreen />;
-  // Admins skip the winery selector — they manage the whole platform
-  if (!winery && !adminUser) return <WinerySelector user={user} onSelect={handleSelectWinery} isAdminUser={false} />;
+  if (!winery && claimStatus === "pending") return <PendingClaimScreen wineryName={claimWineryName} onLogout={handleLogout} />;
+  if (!winery) return <WinerySelector user={user} onSelect={handleSelectWinery} />;
 
-  // Admin-only nav (no winery selected) vs full nav (winery selected)
-  const wineryNavItems = (winery || adminUser) ? [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "traffic", label: "Traffic", icon: Activity },
-    { id: "trails", label: "Trails", icon: Map },
-    { id: "benchmark", label: "Benchmark", icon: Award },
-    { id: "profile", label: "Edit Profile", icon: Pencil },
-    { id: "settings", label: "Settings", icon: Settings },
-  ] : [];
-
-  const navItems = [
-    ...wineryNavItems,
-    ...(adminUser ? [
-      { id: "divider", label: "", icon: null },
-      { id: "admin-overview", label: "Admin", icon: Shield },
-      { id: "admin-claims", label: "Claims", icon: ClipboardList },
-      { id: "admin-wineries", label: "Wineries", icon: Wine },
-      { id: "admin-users", label: "Users", icon: Users },
-    ] : []),
-  ];
-
-  // Default admin to admin-overview if no winery selected
-  const activePage = (!winery && adminUser && !page.startsWith("admin")) ? "admin-overview" : page;
-
+  // Full dashboard (locked to their winery)
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar overlay on mobile */}
@@ -1690,29 +1055,26 @@ export default function App() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map(item => {
-            if (item.id === "divider") return <div key="divider" className="border-t border-gray-100 my-2 mx-2" />;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { setPage(item.id); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${activePage === item.id ? "bg-purple-50 text-purple-700" : item.id.startsWith("admin") ? "text-amber-600 hover:bg-amber-50" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
-              >
-                <item.icon className="w-4.5 h-4.5" />
-                {item.label}
-              </button>
-            );
-          })}
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition ${page === item.id ? "bg-purple-50 text-purple-700" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"}`}
+            >
+              <item.icon className="w-4.5 h-4.5" />
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div className="p-3 border-t border-gray-100">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-600">
-              {winery ? winery.name.charAt(0) : <Shield className="w-4 h-4" />}
+              {winery.name.charAt(0)}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-gray-900 truncate">{winery ? winery.name : "Platform Admin"}</div>
-              <div className="text-[10px] text-gray-400">{adminUser ? "Admin" : tier === "pro" ? "Pro Plan" : "Free Plan"}</div>
+              <div className="text-xs font-semibold text-gray-900 truncate">{winery.name}</div>
+              <div className="text-[10px] text-gray-400">{tier === "pro" ? "Pro Plan" : "Free Plan"}</div>
             </div>
           </div>
         </div>
@@ -1726,50 +1088,15 @@ export default function App() {
             <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu className="w-5 h-5 text-gray-500" />
             </button>
-            {/* Winery dropdown for admin, static display for regular users */}
-            {adminUser ? (
-              <div className="hidden sm:block relative">
-                <button onClick={() => setWineryDropdownOpen(!wineryDropdownOpen)} className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2 hover:bg-gray-200 transition">
-                  {winery ? (
-                    <><MapPin className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-600">{winery.name}</span><span className="text-xs text-gray-400">· {winery.region}</span></>
-                  ) : (
-                    <><Wine className="w-4 h-4 text-purple-500" /><span className="text-sm text-gray-600">Select a winery</span></>
-                  )}
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                </button>
-                {wineryDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 overflow-hidden">
-                    <div className="p-2 border-b border-gray-100">
-                      <input type="text" placeholder="Search wineries..." value={winerySearch} onChange={e => setWinerySearch(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none" autoFocus />
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {WINERIES.filter(w => w.name.toLowerCase().includes(winerySearch.toLowerCase()) || w.region.toLowerCase().includes(winerySearch.toLowerCase())).map(w => (
-                        <button key={w.id} onClick={() => handleSelectWinery(w)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-purple-50 transition text-sm ${winery?.id === w.id ? "bg-purple-50 text-purple-700" : "text-gray-600"}`}>
-                          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: w.gradient || "linear-gradient(135deg, #6b2fa0, #9333ea)" }}>
-                            <Wine className="w-3.5 h-3.5 text-white" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{w.name}</div>
-                            <div className="text-xs text-gray-400">{w.region}</div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
-                {winery ? (
-                  <><MapPin className="w-4 h-4 text-gray-400" /><span className="text-sm text-gray-600">{winery.name}</span><span className="text-xs text-gray-400">· {winery.region}</span></>
-                ) : (
-                  <><Shield className="w-4 h-4 text-amber-500" /><span className="text-sm text-gray-600">Platform Admin</span></>
-                )}
-              </div>
-            )}
+            {/* Static winery display */}
+            <div className="hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
+              <MapPin className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-600">{winery.name}</span>
+              <span className="text-xs text-gray-400">· {winery.region}</span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            {tier === "free" && !adminUser && (
+            {tier === "free" && (
               <button className="hidden sm:flex items-center gap-1.5 bg-purple-600 text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-purple-700 transition">
                 <Crown className="w-3.5 h-3.5" /> Upgrade to Pro
               </button>
@@ -1780,29 +1107,14 @@ export default function App() {
           </div>
         </header>
 
-        {/* Click-away backdrop for dropdown */}
-        {wineryDropdownOpen && <div className="fixed inset-0 z-40" onClick={() => { setWineryDropdownOpen(false); setWinerySearch(""); }} />}
-
         {/* Page Content */}
         <div className="p-6 max-w-6xl mx-auto">
-          {/* Winery pages — show prompt if no winery selected */}
-          {!winery && !activePage.startsWith("admin") && adminUser && (
-            <div className="text-center py-20">
-              <Wine className="w-12 h-12 text-purple-300 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-900">Select a Winery</h2>
-              <p className="text-sm text-gray-400 mt-2">Use the dropdown in the header to pick a winery and view its analytics.</p>
-            </div>
-          )}
-          {winery && activePage === "overview" && <OverviewPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
-          {winery && activePage === "traffic" && <TrafficPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
-          {winery && activePage === "trails" && <TrailsPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
-          {winery && activePage === "benchmark" && <BenchmarkPage data={data} winery={winery} tier={adminUser ? "pro" : tier} />}
-          {winery && activePage === "profile" && <ProfileEditorPage winery={winery} user={user} tier={adminUser ? "pro" : tier} />}
-          {winery && activePage === "settings" && <SettingsPage winery={winery} tier={adminUser ? "pro" : tier} onLogout={handleLogout} />}
-          {adminUser && activePage === "admin-overview" && <AdminOverviewPage />}
-          {adminUser && activePage === "admin-claims" && <AdminClaimsPage />}
-          {adminUser && activePage === "admin-wineries" && <AdminWineriesPage />}
-          {adminUser && activePage === "admin-users" && <AdminUsersPage />}
+          {page === "overview" && <OverviewPage data={data} winery={winery} tier={tier} />}
+          {page === "traffic" && <TrafficPage data={data} winery={winery} tier={tier} />}
+          {page === "trails" && <TrailsPage data={data} winery={winery} tier={tier} />}
+          {page === "benchmark" && <BenchmarkPage data={data} winery={winery} tier={tier} />}
+          {page === "profile" && <ProfileEditorPage winery={winery} user={user} tier={tier} />}
+          {page === "settings" && <SettingsPage winery={winery} tier={tier} onLogout={handleLogout} />}
         </div>
       </main>
     </div>
