@@ -62,9 +62,7 @@ export default function App() {
         setUser(null);
         setOwnerProfile(null);
         setOnboardingData(null);
-        if (![SCREENS.LANDING, SCREENS.SIGN_UP, SCREENS.SIGN_IN].includes(screen)) {
-          setScreen(SCREENS.LANDING);
-        }
+        setScreen(SCREENS.LANDING);
         return;
       }
 
