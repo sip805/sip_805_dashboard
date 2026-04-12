@@ -1,17 +1,22 @@
-// ══════════════════════════════════════════════════════════════
-// AddWinery — New winery submission form
+// ==============================================================
+// AddWinery — New winery submission form (Path B)
 //
-// PATH B of the two-path onboarding flow.
-// For owners whose winery is NOT already in the Sip805 list.
+// For owners whose winery is NOT in the Sip805 list.
+// Includes:
+//   - Required field validation
+//   - Duplicate winery detection against WINERIES dataset
+//   - canSubmitWinerySubmission() guard to prevent double-submit
+//   - Enriched record shape for admin review
 //
 // Submits to Firestore "winerySubmissions" collection.
-// Admin reviews in the separate admin app, creates the winery
-// entry, then approves ownership — nothing auto-publishes.
-// ══════════════════════════════════════════════════════════════
+// Admin reviews in the separate admin app — nothing auto-publishes.
+// ==============================================================
 
 import { useState } from "react";
-import { Wine, ArrowLeft, CheckCircle, LogOut, AlertCircle } from "lucide-react";
-import { submitWinerySubmission, logOut } from "../firebaseClient.js";
+import { Wine, ArrowLeft, CheckCircle, LogOut, AlertCircle, AlertTriangle } from "lucide-react";
+import { WINERIES } from "../data/wineries.js";
+import { submitWinerySubmission, canSubmitWinerySubmission, logOut } from "../firebaseClient.js";
+import { findPotentialWineryDuplicates } from "../utils/duplicateDetection.js";
 
 const REGIONS = [
   "Adelaida District",
@@ -26,6 +31,7 @@ const REGIONS = [
   "San Luis Obispo",
   "Santa Ynez Valley",
   "Santa Maria Valley",
+  "Sta. Rita Hills",
   "Los Olivos",
   "Other",
 ];
@@ -45,7 +51,7 @@ function validate(f) {
   return e;
 }
 
-export default function AddWinery({ user, onBack, onSubmitted }) {
+export default function AddWinery({ user, onBack, onSubmitted, onClaimExisting }) {
   const [form, setForm] = useState({
     wineryName: "",
     region: "",
@@ -58,19 +64,51 @@ export default function AddWinery({ user, onBack, onSubmitted }) {
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [globalError, setGlobalError] = useState("");
+
+  // Duplicate detection state
+  const [duplicates, setDuplicates] = useState([]);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [dupOverridden, setDupOverridden] = useState(false);
 
   const set = (key, val) => {
     setForm(prev => ({ ...prev, [key]: val }));
     if (errors[key]) setErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+    // Reset duplicate override if they change the name or website
+    if (key === "wineryName" || key === "website") {
+      setDupOverridden(false);
+      setShowDuplicateWarning(false);
+    }
   };
 
   const handleSubmit = async () => {
+    setGlobalError("");
+
+    // 1. Validate required fields
     const errs = validate(form);
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
+    // 2. Duplicate detection (only on first attempt, not after override)
+    if (!dupOverridden) {
+      const dupes = findPotentialWineryDuplicates(form, WINERIES);
+      if (dupes.length > 0) {
+        setDuplicates(dupes);
+        setShowDuplicateWarning(true);
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
+      // 3. Guard: prevent duplicate active onboarding
+      const check = await canSubmitWinerySubmission(user.uid);
+      if (!check.allowed) {
+        setGlobalError(check.reason);
+        setSubmitting(false);
+        return;
+      }
+
+      // 4. Submit with enriched shape
       await submitWinerySubmission(user.uid, user.email, {
         wineryName: form.wineryName.trim(),
         region: form.region,
@@ -81,33 +119,74 @@ export default function AddWinery({ user, onBack, onSubmitted }) {
         contactEmail: form.contactEmail.trim(),
         notes: form.notes.trim(),
       });
-      setSubmitted(true);
+
       if (onSubmitted) onSubmitted({ wineryName: form.wineryName.trim() });
     } catch (e) {
-      alert("Error submitting: " + e.message);
+      setGlobalError("Error submitting: " + e.message);
     }
     setSubmitting(false);
   };
 
-  // ── Success ────────────────────────────────────────────────
-  if (submitted) {
+  const handleSubmitAnyway = () => {
+    setDupOverridden(true);
+    setShowDuplicateWarning(false);
+    // Immediately submit since user explicitly chose to continue
+    setTimeout(() => handleSubmit(), 0);
+  };
+
+  // ── Duplicate warning overlay ──────────────────────────────
+  if (showDuplicateWarning) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+        <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Possible Match Found</h2>
+              <p className="text-xs text-gray-400">We found wineries that may already match your submission.</p>
+            </div>
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Winery Submitted</h2>
-          <p className="text-sm text-gray-500 mt-3 leading-relaxed">
-            Your submission for <span className="font-semibold text-gray-700">{form.wineryName}</span> is under review.
-          </p>
-          <p className="text-xs text-gray-400 mt-2">
-            Our team will add your winery to Sip805 and grant you dashboard access once approved.
-          </p>
-          <p className="text-xs text-gray-400 mt-1">This usually takes 1–3 business days.</p>
-          <button onClick={logOut} className="mt-6 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1.5 mx-auto">
-            <LogOut className="w-4 h-4" /> Sign Out
-          </button>
+
+          <div className="space-y-2 mb-5">
+            {duplicates.map(d => (
+              <div key={d.winery.id} className="border border-amber-200 bg-amber-50/50 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{d.winery.name}</div>
+                    <div className="text-xs text-gray-500">{d.winery.region} &middot; {d.winery.price}</div>
+                  </div>
+                  <button
+                    onClick={() => onClaimExisting && onClaimExisting(d.winery)}
+                    className="text-xs font-semibold text-purple-600 hover:text-purple-700 px-3 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 transition"
+                  >
+                    Claim This
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {d.reasons.map((r, i) => (
+                    <span key={i} className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{r}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowDuplicateWarning(false)}
+              className="flex-1 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition"
+            >
+              Edit Submission
+            </button>
+            <button
+              onClick={handleSubmitAnyway}
+              className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition"
+            >
+              Submit Anyway
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -151,6 +230,13 @@ export default function AddWinery({ user, onBack, onSubmitted }) {
             <p className="text-xs text-gray-400">Tell us about your winery so we can add it to Sip805</p>
           </div>
         </div>
+
+        {globalError && (
+          <div className="bg-red-50 rounded-xl p-3 mb-4 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-red-600">{globalError}</p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <Field label="Winery Name" field="wineryName" required placeholder="e.g. Silver Oak Cellars" />

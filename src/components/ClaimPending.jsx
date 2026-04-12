@@ -1,14 +1,17 @@
-// ══════════════════════════════════════════════════════════════
+// ==============================================================
 // ClaimPending — Holding screen while claim awaits admin approval
 //
 // Shown when wineryClaims/{uid}.status === "pending".
 // The admin app (separate) will approve/reject from their end.
-// ══════════════════════════════════════════════════════════════
+// Uses amber accent color.
+// ==============================================================
 
 import { Clock, LogOut, Mail } from "lucide-react";
 import { logOut } from "../firebaseClient.js";
 
-export default function ClaimPending({ wineryName }) {
+export default function ClaimPending({ claim }) {
+  const wineryName = claim?.wineryName || "your winery";
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">

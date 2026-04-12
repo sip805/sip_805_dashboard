@@ -2,24 +2,24 @@
 // ClaimWinery — Searchable winery selector + claim submission
 //
 // TWO-PATH ONBOARDING:
-//   Path A: Winery is already in the Sip805 list -> claim it here
+//   Path A: Winery is in the Sip805 list -> claim it here
 //   Path B: Winery is NOT listed -> "Add My Winery" CTA routes
 //           to the AddWinery screen (handled by App.jsx)
 //
-// Shown after auth when no approved owner profile, no pending
-// claim, and no pending submission exists. Owner cannot access
-// the dashboard until an admin approves.
+// Before submitting, checks canSubmitClaim() to prevent
+// duplicate active onboarding records per user.
 // ==============================================================
 
 import { useState } from "react";
-import { Wine, Star, LogOut, PlusCircle } from "lucide-react";
+import { Wine, Star, LogOut, PlusCircle, AlertCircle } from "lucide-react";
 import { WINERIES } from "../data/wineries.js";
-import { submitClaim, logOut } from "../firebaseClient.js";
+import { submitClaim, canSubmitClaim, logOut } from "../firebaseClient.js";
 
 export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const filtered = WINERIES.filter(w =>
     w.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,12 +29,21 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
   const handleSubmit = async () => {
     if (!selected || submitting) return;
     setSubmitting(true);
+    setError("");
+
     try {
+      // Guard: prevent duplicate active onboarding
+      const check = await canSubmitClaim(user.uid);
+      if (!check.allowed) {
+        setError(check.reason);
+        setSubmitting(false);
+        return;
+      }
+
       await submitClaim(user.uid, user.email, selected.id, selected.name);
-      // Notify App.jsx to transition to ClaimPending screen
       if (onClaimSubmitted) onClaimSubmitted({ wineryName: selected.name });
     } catch (e) {
-      alert("Error submitting claim: " + e.message);
+      setError("Error submitting claim: " + e.message);
       setSubmitting(false);
     }
   };
@@ -57,8 +66,16 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
               Your request will be reviewed before dashboard access is granted.
             </p>
           </div>
+
+          {error && (
+            <div className="bg-red-50 rounded-xl p-3 mb-4 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
+
           <div className="flex gap-3">
-            <button onClick={() => setSelected(null)} className="flex-1 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition">Back</button>
+            <button onClick={() => { setSelected(null); setError(""); }} className="flex-1 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition">Back</button>
             <button onClick={handleSubmit} disabled={submitting} className="flex-1 py-3 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition disabled:opacity-50">
               {submitting ? "Submitting..." : "Submit Claim"}
             </button>
@@ -104,7 +121,7 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
           )}
         </div>
 
-        {/* Path B — winery not in list, add a new one */}
+        {/* Path B: winery not in list */}
         <div className="mt-4 pt-4 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-2">Can't find your winery?</p>
           <button
