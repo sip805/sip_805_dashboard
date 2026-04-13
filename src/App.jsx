@@ -103,17 +103,30 @@ export default function App() {
         switch (state.screen) {
           case "dashboard":
             setOwnerProfile(state.data);
-            // Load the winery record from Firestore
-            if (state.data && state.data.wineryId) {
-              setLoadingWinery(true);
-              try {
-                const winery = await getWineryById(state.data.wineryId);
-                setWineryRecord(winery);
-              } catch (err) {
-                console.error("Error loading winery record:", err);
+            // Load the winery record from Firestore.
+            // Guard: only attempt lookup if wineryId is a valid number.
+            // A NaN or non-numeric wineryId would cause getWineryById to
+            // query for doc "NaN", which never exists.
+            {
+              const numId = Number(state.data?.wineryId);
+              const hasValidId = Number.isFinite(numId) && numId >= 1;
+              if (hasValidId) {
+                setLoadingWinery(true);
+                try {
+                  const winery = await getWineryById(numId);
+                  setWineryRecord(winery);
+                } catch (err) {
+                  console.error("Error loading winery record:", err);
+                  setWineryRecord(null);
+                } finally {
+                  setLoadingWinery(false);
+                }
+              } else {
+                console.warn(
+                  `Owner profile has invalid wineryId: ${JSON.stringify(state.data?.wineryId)}. ` +
+                  `Dashboard will use fallback data. Run the admin repair utility to fix this.`
+                );
                 setWineryRecord(null);
-              } finally {
-                setLoadingWinery(false);
               }
             }
             setScreen(SCREENS.DASHBOARD);

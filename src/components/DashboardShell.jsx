@@ -36,8 +36,15 @@ export default function DashboardShell({ user, ownerProfile, winery }) {
     price: "$$",
   };
 
+  // CRITICAL: Normalize the winery ID to a finite number.
+  // If ownerProfile.wineryId is NaN (from a bad claim approval), or the
+  // winery record has a non-numeric ID, generateDemoData would produce NaN
+  // for every KPI. We catch that here and fall back to a safe seed.
+  const rawId = Number(displayWinery.id ?? displayWinery.wineryId ?? ownerProfile.wineryId);
+  const safeWineryId = Number.isFinite(rawId) && rawId >= 1 ? rawId : 1;
+
   const tier = ownerProfile.tier || "free";
-  const data = useMemo(() => generateDemoData(displayWinery.id), [displayWinery.id]);
+  const data = useMemo(() => generateDemoData(safeWineryId), [safeWineryId]);
 
   const navItems = [
     { id: "overview", label: "Overview", icon: BarChart3 },

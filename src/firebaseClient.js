@@ -67,6 +67,23 @@ export async function createAccount(email, password) {
 export const logOut = () => signOut(auth);
 export const onAuthChange = (cb) => onAuthStateChanged(auth, cb);
 
+// == Winery ID Helpers =========================================
+// Numeric winery IDs are required because the dashboard's
+// generateDemoData() does math on the ID, and Firestore queries
+// for visits/owners use the numeric ID. These helpers ensure
+// we never propagate NaN through the system.
+
+/** Safe coercion: returns a valid positive integer or null */
+function safeNumericWineryId(value) {
+  const num = Number(value);
+  return (Number.isFinite(num) && num >= 1 && Math.floor(num) === num) ? num : null;
+}
+
+/** Extract a safe numeric ID from a Firestore winery doc */
+function extractWineryId(docData, docId) {
+  return safeNumericWineryId(docData.wineryId) ?? safeNumericWineryId(docId);
+}
+
 // == Canonical Wineries (Firestore) ============================
 // The "wineries" collection is the source of truth.
 // These helpers let the claim flow and dashboard look up wineries
@@ -76,26 +93,41 @@ export const onAuthChange = (cb) => onAuthStateChanged(auth, cb);
 export async function getActiveWineries() {
   const snap = await getDocs(collection(db, "wineries"));
   return snap.docs
-    .map(d => ({ id: d.data().wineryId ?? parseInt(d.id, 10), firestoreDocId: d.id, ...d.data() }))
+    .map(d => {
+      const data = d.data();
+      const numId = extractWineryId(data, d.id);
+      return { id: numId, firestoreDocId: d.id, ...data, wineryId: numId ?? data.wineryId };
+    })
     .filter(w => w.status !== "inactive" && w.status !== "hidden");
 }
 
 /** Fetch all wineries regardless of status */
 export async function getAllWineries() {
   const snap = await getDocs(collection(db, "wineries"));
-  return snap.docs.map(d => ({
-    id: d.data().wineryId ?? parseInt(d.id, 10),
-    firestoreDocId: d.id,
-    ...d.data(),
-  }));
+  return snap.docs.map(d => {
+    const data = d.data();
+    const numId = extractWineryId(data, d.id);
+    return { id: numId, firestoreDocId: d.id, ...data, wineryId: numId ?? data.wineryId };
+  });
 }
 
 /** Fetch a single winery by wineryId */
 export async function getWineryById(wineryId) {
-  const snap = await getDoc(doc(db, "wineries", String(wineryId)));
+  // Guard: don't query Firestore with "NaN" or "undefined"
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) {
+    console.warn(`getWineryById called with invalid wineryId: ${JSON.stringify(wineryId)}`);
+    return null;
+  }
+  const snap = await getDoc(doc(db, "wineries", String(numId)));
   if (!snap.exists()) return null;
   const data = snap.data();
-  return { id: data.wineryId ?? parseInt(snap.id, 10), firestoreDocId: snap.id, ...data };
+  return {
+    id: safeNumericWineryId(data.wineryId) ?? numId,
+    firestoreDocId: snap.id,
+    ...data,
+    wineryId: safeNumericWineryId(data.wineryId) ?? numId,
+  };
 }
 
 // == Winery Owner Profile ======================================
@@ -108,8 +140,18 @@ export async function getOwnerProfile(uid) {
 // == Winery Claims =============================================
 
 export async function submitClaim(uid, email, wineryId, wineryName) {
+  // Ensure the claim always stores a valid numeric wineryId.
+  // If a non-numeric ID slips in here, it will propagate to wineryOwners
+  // when the admin approves the claim, causing NaN in the dashboard.
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) {
+    throw new Error(
+      `Cannot submit claim: wineryId "${wineryId}" is not a valid numeric ID. ` +
+      `Please contact support if this winery is missing an ID.`
+    );
+  }
   return setDoc(doc(db, "wineryClaims", uid), {
-    uid, email, wineryId, wineryName,
+    uid, email, wineryId: numId, wineryName,
     status: "pending",
     submittedAt: serverTimestamp(),
   });

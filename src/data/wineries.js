@@ -142,12 +142,17 @@ export const TRAILS = [
   { id: 6, name: "Dog-Friendly Trail", stops: [2, 7, 22, 19, 17, 26] },
 ];
 
-// Deterministic demo data generator — same seed = same output
+// Deterministic demo data generator — same seed = same output.
+// IMPORTANT: wineryId MUST be a finite number for math to work.
+// If an invalid ID slips through (NaN, undefined, string), we
+// fall back to a safe seed so the dashboard never renders NaN.
 export function generateDemoData(wineryId) {
+  const numericId = Number(wineryId);
+  const safeId = Number.isFinite(numericId) && numericId >= 1 ? numericId : 1;
   const now = new Date();
   const daily = [];
   const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, visitors: 0 }));
-  const seed = wineryId * 137;
+  const seed = safeId * 137;
 
   for (let d = 89; d >= 0; d--) {
     const date = new Date(now);
@@ -194,15 +199,23 @@ export function generateDemoData(wineryId) {
   const vp30 = prev30.reduce((s, d) => s + d.visitors, 0);
   const c30 = last30.reduce((s, d) => s + d.checkIns, 0);
   const cp30 = prev30.reduce((s, d) => s + d.checkIns, 0);
-  const ar30 = +(last30.reduce((s, d) => s + d.avgRating, 0) / 30).toFixed(1);
+  const rawAr30 = last30.length > 0 ? last30.reduce((s, d) => s + d.avgRating, 0) / last30.length : 0;
+  const ar30 = Number.isFinite(rawAr30) ? +rawAr30.toFixed(1) : 0;
+
+  // Safe percentage change: guard against division by zero and NaN
+  const safePctChange = (curr, prev) => {
+    if (!Number.isFinite(curr) || !Number.isFinite(prev) || prev === 0) return 0;
+    const pct = ((curr - prev) / prev) * 100;
+    return Number.isFinite(pct) ? +pct.toFixed(1) : 0;
+  };
 
   return {
     daily, hourly, sources, ratings,
     kpi: {
-      visitors: { value: v30, change: vp30 ? +((v30 - vp30) / vp30 * 100).toFixed(1) : 0 },
-      checkIns: { value: c30, change: cp30 ? +((c30 - cp30) / cp30 * 100).toFixed(1) : 0 },
+      visitors: { value: v30, change: safePctChange(v30, vp30) },
+      checkIns: { value: c30, change: safePctChange(c30, cp30) },
       avgRating: { value: ar30, change: +((Math.abs(Math.sin(seed)) * 0.4 - 0.1)).toFixed(1) },
-      trailAppearances: { value: TRAILS.filter(t => t.stops.includes(wineryId)).length, change: 0 },
+      trailAppearances: { value: TRAILS.filter(t => t.stops.includes(safeId)).length, change: 0 },
     },
   };
 }

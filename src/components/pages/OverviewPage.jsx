@@ -3,19 +3,22 @@ import { Eye, CheckCircle, Star, Map, ArrowUpRight, ArrowDownRight, Lock, Crown 
 import { AreaChart, Area, BarChart, Bar, PieChart as RPieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 const KpiCard = ({ icon: Icon, label, value, change, suffix = "", color = "purple" }) => {
-  const up = change > 0;
+  // Guard against NaN/invalid values — never render broken metrics
+  const safeValue = (typeof value === "number" && Number.isFinite(value)) ? value : 0;
+  const safeChange = (typeof change === "number" && Number.isFinite(change)) ? change : 0;
+  const up = safeChange > 0;
   const cm = { purple: "bg-purple-50 text-purple-600", blue: "bg-blue-50 text-blue-600", green: "bg-green-50 text-green-600", amber: "bg-amber-50 text-amber-600" };
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-4 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-2">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${cm[color]}`}><Icon className="w-4 h-4" /></div>
-        {change !== 0 && change !== undefined && (
+        {safeChange !== 0 && (
           <div className={`flex items-center gap-0.5 text-xs font-medium ${up ? "text-green-600" : "text-red-500"}`}>
-            {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{Math.abs(change)}%
+            {up ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}{Math.abs(safeChange)}%
           </div>
         )}
       </div>
-      <div className="text-xl font-bold text-gray-900">{typeof value === "number" ? value.toLocaleString() : value}{suffix}</div>
+      <div className="text-xl font-bold text-gray-900">{safeValue.toLocaleString()}{suffix}</div>
       <div className="text-xs text-gray-400 mt-0.5">{label}</div>
     </div>
   );
