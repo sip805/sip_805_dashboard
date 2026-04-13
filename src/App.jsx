@@ -21,10 +21,12 @@
 // Admin functions live in the separate sip805-admin app.
 // ==============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
-  onAuthChange, getOnboardingState, logOut
+  onAuthChange, getOnboardingState, getActiveWineries, getWineryById, logOut
 } from "./firebaseClient.js";
+import { mergeFirestoreWithStatic } from "./wineryUtils.js";
+import { WINERIES as STATIC_WINERIES } from "./data/wineries.js";
 import Landing from "./Landing.jsx";
 import SignUp from "./components/SignUp.jsx";
 import SignIn from "./components/SignIn.jsx";
@@ -55,6 +57,30 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [ownerProfile, setOwnerProfile] = useState(null);
   const [onboardingData, setOnboardingData] = useState(null);
+  const [firestoreWineries, setFirestoreWineries] = useState(null);
+  const [wineryRecord, setWineryRecord] = useState(null);
+  const [loadingWinery, setLoadingWinery] = useState(false);
+
+  // Compute merged wineries from Firestore + static fallback
+  const allWineries = useMemo(
+    () => mergeFirestoreWithStatic(firestoreWineries || [], STATIC_WINERIES),
+    [firestoreWineries]
+  );
+
+  // Load Firestore wineries on component mount
+  useEffect(() => {
+    const loadWineries = async () => {
+      try {
+        const wineries = await getActiveWineries();
+        setFirestoreWineries(wineries);
+      } catch (err) {
+        console.error("Error loading Firestore wineries:", err);
+        setFirestoreWineries([]);
+      }
+    };
+
+    loadWineries();
+  }, []);
 
   useEffect(() => {
     const unsub = onAuthChange(async (firebaseUser) => {
@@ -62,6 +88,7 @@ export default function App() {
         setUser(null);
         setOwnerProfile(null);
         setOnboardingData(null);
+        setWineryRecord(null);
         setScreen(SCREENS.LANDING);
         return;
       }
@@ -76,6 +103,19 @@ export default function App() {
         switch (state.screen) {
           case "dashboard":
             setOwnerProfile(state.data);
+            // Load the winery record from Firestore
+            if (state.data && state.data.wineryId) {
+              setLoadingWinery(true);
+              try {
+                const winery = await getWineryById(state.data.wineryId);
+                setWineryRecord(winery);
+              } catch (err) {
+                console.error("Error loading winery record:", err);
+                setWineryRecord(null);
+              } finally {
+                setLoadingWinery(false);
+              }
+            }
             setScreen(SCREENS.DASHBOARD);
             break;
           case "claimPending":
@@ -138,6 +178,7 @@ export default function App() {
       return (
         <ClaimWinery
           user={user}
+          wineries={allWineries}
           onAddWinery={() => setScreen(SCREENS.ADD_WINERY)}
           onClaimSubmitted={(data) => {
             setOnboardingData({ wineryName: data.wineryName, status: "pending" });
@@ -151,6 +192,7 @@ export default function App() {
       return (
         <AddWinery
           user={user}
+          wineries={allWineries}
           onBack={() => setScreen(SCREENS.CLAIM_WINERY)}
           onSubmitted={(data) => {
             setOnboardingData({ wineryName: data.wineryName, status: "pending" });
@@ -179,7 +221,23 @@ export default function App() {
 
     // Dashboard: locked to approved owner
     case SCREENS.DASHBOARD:
-      return <DashboardShell user={user} ownerProfile={ownerProfile} />;
+      if (loadingWinery) {
+        return (
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-10 h-10 border-3 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-gray-500 mt-4">Loading winery details...</p>
+            </div>
+          </div>
+        );
+      }
+      return (
+        <DashboardShell
+          user={user}
+          ownerProfile={ownerProfile}
+          winery={wineryRecord}
+        />
+      );
 
     default:
       return null;

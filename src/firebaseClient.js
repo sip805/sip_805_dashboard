@@ -1,9 +1,9 @@
 // ==============================================================
 // Firebase — Sip805 Winery Dashboard (Owner-only)
 //
-// This file contains ONLY winery-owner functions.
-// Admin functions (approve/reject claims, platform stats, etc.)
-// live in the separate sip805-admin app.
+// MIGRATION NOTE: This app now reads wineries from the Firestore
+// "wineries" collection instead of the hardcoded WINERIES array.
+// The static array in data/wineries.js is kept as fallback only.
 // ==============================================================
 
 import { initializeApp } from "firebase/app";
@@ -35,7 +35,7 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 const googleProvider = new GoogleAuthProvider();
 
-// ── Auth ─────────────────────────────────────────────────────
+// == Auth ======================================================
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
@@ -67,15 +67,45 @@ export async function createAccount(email, password) {
 export const logOut = () => signOut(auth);
 export const onAuthChange = (cb) => onAuthStateChanged(auth, cb);
 
-// ── Winery Owner Profile (wineryOwners/{uid}) ────────────────
+// == Canonical Wineries (Firestore) ============================
+// The "wineries" collection is the source of truth.
+// These helpers let the claim flow and dashboard look up wineries
+// from Firestore instead of the hardcoded static array.
+
+/** Fetch all active wineries (for claim selector) */
+export async function getActiveWineries() {
+  const snap = await getDocs(collection(db, "wineries"));
+  return snap.docs
+    .map(d => ({ id: d.data().wineryId ?? parseInt(d.id, 10), firestoreDocId: d.id, ...d.data() }))
+    .filter(w => w.status !== "inactive" && w.status !== "hidden");
+}
+
+/** Fetch all wineries regardless of status */
+export async function getAllWineries() {
+  const snap = await getDocs(collection(db, "wineries"));
+  return snap.docs.map(d => ({
+    id: d.data().wineryId ?? parseInt(d.id, 10),
+    firestoreDocId: d.id,
+    ...d.data(),
+  }));
+}
+
+/** Fetch a single winery by wineryId */
+export async function getWineryById(wineryId) {
+  const snap = await getDoc(doc(db, "wineries", String(wineryId)));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return { id: data.wineryId ?? parseInt(snap.id, 10), firestoreDocId: snap.id, ...data };
+}
+
+// == Winery Owner Profile ======================================
 
 export async function getOwnerProfile(uid) {
   const snap = await getDoc(doc(db, "wineryOwners", uid));
   return snap.exists() ? snap.data() : null;
 }
 
-// ── Winery Claims (wineryClaims/{uid}) ───────────────────────
-// status: "pending" | "approved" | "rejected"
+// == Winery Claims =============================================
 
 export async function submitClaim(uid, email, wineryId, wineryName) {
   return setDoc(doc(db, "wineryClaims", uid), {
@@ -90,9 +120,7 @@ export async function getClaimStatus(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-// ── Winery Submissions (winerySubmissions/{uid}) ─────────────
-// status: "pending" | "approved" | "rejected" | "needs_more_info"
-// For owners whose winery is NOT yet in the Sip805 list.
+// == Winery Submissions ========================================
 
 export async function submitWinerySubmission(uid, email, details) {
   return setDoc(doc(db, "winerySubmissions", uid), {
@@ -121,34 +149,19 @@ export async function getSubmissionStatus(uid) {
   return snap.exists() ? snap.data() : null;
 }
 
-// ── Onboarding State Resolution ──────────────────────────────
-// Reads all three collections in priority order and returns a
-// single object describing where the user is in onboarding.
-//
-// Priority: approved owner > pending claim > pending submission
-//           > rejected claim > rejected/needs_more_info submission
-//           > no record (fresh onboarding)
-//
-// Returns: { screen, data }
-//   screen: "dashboard" | "claimPending" | "claimRejected"
-//           | "submissionPending" | "submissionRejected" | "onboarding"
-//   data:   the relevant Firestore doc (or null)
+// == Onboarding State Resolution ===============================
 
 export async function getOnboardingState(uid) {
-  // 1. Approved owner?
   const owner = await getOwnerProfile(uid);
   if (owner) return { screen: "dashboard", data: owner };
 
-  // 2. Claim exists?
   const claim = await getClaimStatus(uid);
   if (claim) {
     if (claim.status === "pending") return { screen: "claimPending", data: claim };
     if (claim.status === "rejected") return { screen: "claimRejected", data: claim };
-    // approved claim but no owner profile yet — treat as pending
     if (claim.status === "approved") return { screen: "claimPending", data: claim };
   }
 
-  // 3. Submission exists?
   const sub = await getSubmissionStatus(uid);
   if (sub) {
     if (sub.status === "pending") return { screen: "submissionPending", data: sub };
@@ -157,11 +170,10 @@ export async function getOnboardingState(uid) {
     if (sub.status === "approved") return { screen: "submissionPending", data: sub };
   }
 
-  // 4. Nothing — fresh user
   return { screen: "onboarding", data: null };
 }
 
-// ── Duplicate Prevention Guards ──────────────────────────────
+// == Duplicate Prevention Guards ===============================
 
 export async function canSubmitClaim(uid) {
   const state = await getOnboardingState(uid);
@@ -179,7 +191,7 @@ export async function canSubmitWinerySubmission(uid) {
   return { allowed: true, reason: null };
 }
 
-// ── Winery Profile Edits (wineryProfiles/{wineryId}) ─────────
+// == Winery Profile Edits ======================================
 
 const PHONE_RE = /^\(\d{3}\)\s?\d{3}-\d{4}$/;
 const URL_RE = /^[a-zA-Z0-9][\w.-]*\.[a-zA-Z]{2,}(\/.*)?$/;

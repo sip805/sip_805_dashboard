@@ -1,29 +1,25 @@
 // ==============================================================
 // ClaimWinery — Searchable winery selector + claim submission
 //
-// TWO-PATH ONBOARDING:
-//   Path A: Winery is in the Sip805 list -> claim it here
-//   Path B: Winery is NOT listed -> "Add My Winery" CTA routes
-//           to the AddWinery screen (handled by App.jsx)
-//
-// Before submitting, checks canSubmitClaim() to prevent
-// duplicate active onboarding records per user.
+// MIGRATION: Now receives wineries as a prop from App.jsx,
+// which loads them from Firestore instead of the static array.
+// The static WINERIES import is removed.
 // ==============================================================
 
 import { useState } from "react";
 import { Wine, Star, LogOut, PlusCircle, AlertCircle } from "lucide-react";
-import { WINERIES } from "../data/wineries.js";
 import { submitClaim, canSubmitClaim, logOut } from "../firebaseClient.js";
 
-export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
+export default function ClaimWinery({ user, wineries, onAddWinery, onClaimSubmitted }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const filtered = WINERIES.filter(w =>
+  // Search against Firestore-loaded wineries (passed as prop)
+  const filtered = (wineries || []).filter(w =>
     w.name.toLowerCase().includes(search.toLowerCase()) ||
-    w.region.toLowerCase().includes(search.toLowerCase())
+    (w.region || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const handleSubmit = async () => {
@@ -32,7 +28,6 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
     setError("");
 
     try {
-      // Guard: prevent duplicate active onboarding
       const check = await canSubmitClaim(user.uid);
       if (!check.allowed) {
         setError(check.reason);
@@ -112,8 +107,12 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
                 <div className="text-sm font-medium text-gray-900">{w.name}</div>
                 <div className="text-xs text-gray-400">{w.region} &middot; {w.price}</div>
               </div>
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-              <span className="text-sm text-gray-600">{w.rating}</span>
+              {w.rating > 0 && (
+                <>
+                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  <span className="text-sm text-gray-600">{w.rating}</span>
+                </>
+              )}
             </button>
           ))}
           {filtered.length === 0 && (
@@ -121,13 +120,10 @@ export default function ClaimWinery({ user, onAddWinery, onClaimSubmitted }) {
           )}
         </div>
 
-        {/* Path B: winery not in list */}
         <div className="mt-4 pt-4 border-t border-gray-100 text-center">
           <p className="text-xs text-gray-400 mb-2">Can't find your winery?</p>
-          <button
-            onClick={onAddWinery}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700 transition"
-          >
+          <button onClick={onAddWinery}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700 transition">
             <PlusCircle className="w-4 h-4" /> Add My Winery
           </button>
         </div>
