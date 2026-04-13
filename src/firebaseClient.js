@@ -1,9 +1,18 @@
 // ==============================================================
-// Firebase — Sip805 Winery Dashboard (Owner-only)
+// Firebase — Sip805 Winery Dashboard (Owner-only, read-only consumer)
 //
-// MIGRATION NOTE: This app now reads wineries from the Firestore
-// "wineries" collection instead of the hardcoded WINERIES array.
-// The static array in data/wineries.js is kept as fallback only.
+// ARCHITECTURE: The admin app is the control plane for all shared
+// platform data. This dashboard is a READ-ONLY consumer of:
+//   - "wineries" collection        → getActiveWineries(), getWineryById()
+//   - "trails" collection          → getActiveTrails()
+//   - "wineryOwners" collection    → getOwnerProfile() (admin writes)
+//   - "wineryClaims" collection    → submitClaim(), getClaimStatus()
+//   - "winerySubmissions" coll     → submitWinerySubmission(), getSubmissionStatus()
+//   - "wineryProfiles" collection  → getProfileEdits(), saveProfileEdits()
+//   - "visits" collection          → getWineryVisits()
+//
+// Only claims, submissions, and profile edits are written by this app.
+// All canonical winery/trail data is managed by the admin app.
 // ==============================================================
 
 import { initializeApp } from "firebase/app";
@@ -128,6 +137,18 @@ export async function getWineryById(wineryId) {
     ...data,
     wineryId: safeNumericWineryId(data.wineryId) ?? numId,
   };
+}
+
+// == Canonical Trails (Firestore) ==============================
+// Admin app is the control plane for trails. Dashboard reads
+// active trails to show which trails include the owner's winery.
+
+/** Fetch all active trails */
+export async function getActiveTrails() {
+  const snap = await getDocs(collection(db, "trails"));
+  return snap.docs
+    .map(d => ({ firestoreDocId: d.id, ...d.data() }))
+    .filter(t => t.status === "active" || !t.status);
 }
 
 // == Real Visit Analytics ======================================

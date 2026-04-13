@@ -1,13 +1,14 @@
 import { Map, Users, Target, ChevronRight } from "lucide-react";
-import { TRAILS } from "../../data/wineries.js";
 import { KpiCard } from "./OverviewPage.jsx";
 
-// MIGRATION: TrailsPage now shows only real structural trail data
-// (which trails feature this winery). Fake visitor estimates removed.
+// ARCHITECTURE: Trails are managed by the admin app (control plane)
+// and read from Firestore. The `trails` prop is passed down from
+// DashboardShell, which merges Firestore data with a static fallback.
+// This component no longer imports TRAILS directly.
 
-export default function TrailsPage({ data, winery, tier }) {
-  const my = TRAILS.filter(t => t.stops.includes(winery.id));
-  const other = TRAILS.filter(t => !t.stops.includes(winery.id));
+export default function TrailsPage({ data, winery, tier, trails }) {
+  const my = trails.filter(t => t.stops.includes(winery.id));
+  const other = trails.filter(t => !t.stops.includes(winery.id));
 
   return (
     <div className="space-y-5">
@@ -19,7 +20,7 @@ export default function TrailsPage({ data, winery, tier }) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-4">
-        <div className="mb-3"><h3 className="text-base font-bold text-gray-900">Trails Featuring Your Winery</h3><p className="text-xs text-gray-400 mt-0.5">You appear on {my.length} of {TRAILS.length} trails</p></div>
+        <div className="mb-3"><h3 className="text-base font-bold text-gray-900">Trails Featuring Your Winery</h3><p className="text-xs text-gray-400 mt-0.5">You appear on {my.length} of {trails.length} trails</p></div>
         {my.length === 0 ? (
           <div className="text-center py-6"><Map className="w-8 h-8 text-gray-300 mx-auto mb-2" /><p className="text-sm text-gray-400">Your winery doesn't appear on any trails yet.</p></div>
         ) : (

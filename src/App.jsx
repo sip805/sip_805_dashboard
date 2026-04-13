@@ -23,7 +23,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  onAuthChange, getOnboardingState, getActiveWineries, getWineryById, logOut
+  onAuthChange, getOnboardingState, getActiveWineries, getWineryById, logOut,
+  getActiveTrails
 } from "./firebaseClient.js";
 import { mergeFirestoreWithStatic } from "./wineryUtils.js";
 import { WINERIES as STATIC_WINERIES } from "./data/wineries.js";
@@ -58,6 +59,7 @@ export default function App() {
   const [ownerProfile, setOwnerProfile] = useState(null);
   const [onboardingData, setOnboardingData] = useState(null);
   const [firestoreWineries, setFirestoreWineries] = useState(null);
+  const [firestoreTrails, setFirestoreTrails] = useState(null);
   const [wineryRecord, setWineryRecord] = useState(null);
   const [loadingWinery, setLoadingWinery] = useState(false);
 
@@ -67,19 +69,24 @@ export default function App() {
     [firestoreWineries]
   );
 
-  // Load Firestore wineries on component mount
+  // ARCHITECTURE: Load shared data from Firestore (admin is control plane).
+  // Wineries and trails are read from Firestore; static arrays are fallbacks.
   useEffect(() => {
-    const loadWineries = async () => {
+    const loadSharedData = async () => {
       try {
-        const wineries = await getActiveWineries();
+        const [wineries, trails] = await Promise.all([
+          getActiveWineries(),
+          getActiveTrails().catch(() => []),
+        ]);
         setFirestoreWineries(wineries);
+        setFirestoreTrails(trails);
       } catch (err) {
-        console.error("Error loading Firestore wineries:", err);
+        console.error("Error loading Firestore data:", err);
         setFirestoreWineries([]);
+        setFirestoreTrails([]);
       }
     };
-
-    loadWineries();
+    loadSharedData();
   }, []);
 
   useEffect(() => {
@@ -249,6 +256,7 @@ export default function App() {
           user={user}
           ownerProfile={ownerProfile}
           winery={wineryRecord}
+          firestoreTrails={firestoreTrails}
         />
       );
 

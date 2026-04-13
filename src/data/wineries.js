@@ -1,6 +1,13 @@
 // ══════════════════════════════════════════════════════════════
-// Shared winery data — used by dashboard pages & claim selector
-// Mirrors consumer app. Single source of truth for this app.
+// STATIC FALLBACK DATA — Winery Dashboard
+//
+// ARCHITECTURE: The admin app is the control plane for all shared
+// platform data. Canonical wineries and trails live in Firestore.
+// These static arrays are FALLBACK ONLY — used when Firestore data
+// hasn't loaded or is empty. Do NOT edit these to update production
+// data; use the admin app instead.
+//
+// Data flow: Admin App → Firestore → Dashboard (read-only)
 // ══════════════════════════════════════════════════════════════
 
 export const WINERIES = [
@@ -133,6 +140,8 @@ export const WINERIES = [
   { id: 127, name: "Dunites Wine Co.", region: "Edna Valley", rating: 4.6, reviews: 145, price: "$$" },
 ];
 
+// FALLBACK: Canonical trails live in Firestore "trails" collection.
+// DashboardShell merges firestoreTrails with this static array.
 export const TRAILS = [
   { id: 1, name: "Downtown Paso Trail", stops: [32, 33, 34, 35, 36, 86] },
   { id: 2, name: "Highway 46 West Trail", stops: [71, 74, 75, 7, 67, 22] },

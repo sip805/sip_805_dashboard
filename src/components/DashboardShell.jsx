@@ -1,10 +1,11 @@
 // ==============================================================
 // DashboardShell — Sidebar + header + page router
 //
-// MIGRATION: Now receives the winery record as a prop instead of
-// looking it up from the static WINERIES array. The winery is
-// loaded from Firestore by App.jsx before rendering this shell.
-// The static WINERIES import is only used for generateDemoData().
+// ARCHITECTURE: Admin app is the control plane for all shared
+// platform data. This dashboard is a read-only consumer.
+// - Winery record: loaded from Firestore by App.jsx, passed as prop
+// - Trails: loaded from Firestore by App.jsx via firestoreTrails prop
+// - Static TRAILS array is fallback only (used when Firestore empty)
 // ==============================================================
 
 import { useState, useEffect, useMemo } from "react";
@@ -12,7 +13,7 @@ import {
   BarChart3, Activity, Map, Award, Settings, Crown, Bell,
   MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle, CheckCircle, Eye
 } from "lucide-react";
-import { TRAILS } from "../data/wineries.js";
+import { TRAILS as STATIC_TRAILS } from "../data/wineries.js";
 import { logOut, getWineryVisits } from "../firebaseClient.js";
 import OverviewPage from "./pages/OverviewPage.jsx";
 import TrafficPage from "./pages/TrafficPage.jsx";
@@ -35,7 +36,7 @@ function computeRealAnalytics(visits, wineryId, trails) {
     { stars: "2 stars", count: 0, color: "#f97316" },
     { stars: "1 star", count: 0, color: "#ef4444" },
   ];
-  const trailCount = (trails || TRAILS).filter(t => t.stops.includes(wineryId)).length;
+  const trailCount = (trails || STATIC_TRAILS).filter(t => t.stops.includes(wineryId)).length;
 
   if (!visits || visits.length === 0) {
     const emptyDaily = [];
@@ -121,11 +122,24 @@ function computeRealAnalytics(visits, wineryId, trails) {
   };
 }
 
-export default function DashboardShell({ user, ownerProfile, winery }) {
+export default function DashboardShell({ user, ownerProfile, winery, firestoreTrails }) {
   const [page, setPage] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [visits, setVisits] = useState(null);
   const [loadingVisits, setLoadingVisits] = useState(true);
+
+  // ARCHITECTURE: Firestore trails (admin-managed) take priority.
+  // Static TRAILS array is fallback when Firestore has no data.
+  const trails = useMemo(() => {
+    if (firestoreTrails && firestoreTrails.length > 0) {
+      return firestoreTrails.map(t => ({
+        ...t,
+        id: t.trailId || t.id,
+        desc: t.description || t.desc || "",
+      }));
+    }
+    return STATIC_TRAILS;
+  }, [firestoreTrails]);
 
   // Winery is now passed as a prop from App.jsx (loaded from Firestore).
   // Fallback to a minimal record if somehow missing.
@@ -155,8 +169,8 @@ export default function DashboardShell({ user, ownerProfile, winery }) {
 
   // Compute real analytics from Firestore visits
   const data = useMemo(
-    () => computeRealAnalytics(visits || [], safeWineryId),
-    [visits, safeWineryId]
+    () => computeRealAnalytics(visits || [], safeWineryId, trails),
+    [visits, safeWineryId, trails]
   );
 
   const navItems = [
@@ -247,7 +261,7 @@ export default function DashboardShell({ user, ownerProfile, winery }) {
           <div className="max-w-5xl mx-auto">
             {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} />}
             {page === "traffic" && <TrafficPage data={data} winery={displayWinery} tier={tier} />}
-            {page === "trails" && <TrailsPage data={data} winery={displayWinery} tier={tier} />}
+            {page === "trails" && <TrailsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
             {page === "benchmark" && <BenchmarkPage data={data} winery={displayWinery} tier={tier} />}
             {page === "profile" && <ProfileSettings winery={displayWinery} user={user} tier={tier} />}
             {page === "settings" && <SettingsPage winery={displayWinery} tier={tier} onUpgrade={() => setPage("upgrade")} onLogout={handleLogout} />}
