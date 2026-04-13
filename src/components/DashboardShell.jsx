@@ -7,13 +7,13 @@
 // The static WINERIES import is only used for generateDemoData().
 // ==============================================================
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   BarChart3, Activity, Map, Award, Settings, Crown, Bell,
-  MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle
+  MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle, CheckCircle, Eye
 } from "lucide-react";
-import { generateDemoData } from "../data/wineries.js";
-import { logOut } from "../firebaseClient.js";
+import { TRAILS } from "../data/wineries.js";
+import { logOut, getWineryVisits } from "../firebaseClient.js";
 import OverviewPage from "./pages/OverviewPage.jsx";
 import TrafficPage from "./pages/TrafficPage.jsx";
 import TrailsPage from "./pages/TrailsPage.jsx";
@@ -21,9 +21,111 @@ import BenchmarkPage from "./pages/BenchmarkPage.jsx";
 import ProfileSettings from "./ProfileSettings.jsx";
 import UpgradePage from "./UpgradePage.jsx";
 
+// ── Real Analytics from Firestore Visits ──────────────────────
+// MIGRATION COMPLETE: Replaces generateDemoData() for production.
+// Computes real metrics from Firestore visit records.
+// Shows zeros/empty states when no visits exist.
+
+function computeRealAnalytics(visits, wineryId, trails) {
+  const emptyHourly = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, visitors: 0 }));
+  const emptyRatings = [
+    { stars: "5 stars", count: 0, color: "#16a34a" },
+    { stars: "4 stars", count: 0, color: "#84cc16" },
+    { stars: "3 stars", count: 0, color: "#f59e0b" },
+    { stars: "2 stars", count: 0, color: "#f97316" },
+    { stars: "1 star", count: 0, color: "#ef4444" },
+  ];
+  const trailCount = (trails || TRAILS).filter(t => t.stops.includes(wineryId)).length;
+
+  if (!visits || visits.length === 0) {
+    const emptyDaily = [];
+    const now = new Date();
+    for (let d = 89; d >= 0; d--) {
+      const date = new Date(now); date.setDate(date.getDate() - d);
+      emptyDaily.push({ date: date.toISOString().split("T")[0], label: `${date.getMonth()+1}/${date.getDate()}`, visitors: 0, checkIns: 0, avgRating: 0 });
+    }
+    return {
+      daily: emptyDaily, hourly: emptyHourly, sources: [], ratings: emptyRatings,
+      kpi: {
+        visitors: { value: 0, change: 0 }, checkIns: { value: 0, change: 0 },
+        avgRating: { value: 0, change: 0 }, trailAppearances: { value: trailCount, change: 0 },
+      },
+      isEmpty: true, totalVisits: 0, uniqueVisitors: 0,
+    };
+  }
+
+  const now = new Date();
+  const dailyMap = {};
+  const hourCounts = Array(24).fill(0);
+  const uniqueUsers = new Set();
+  const ratingBuckets = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+  for (const v of visits) {
+    const date = v.date ? new Date(v.date) : new Date();
+    const dayKey = date.toISOString().split("T")[0];
+    if (!dailyMap[dayKey]) dailyMap[dayKey] = { users: new Set(), checkIns: 0, ratingSum: 0, ratingN: 0 };
+    dailyMap[dayKey].users.add(v.userId || "anon");
+    dailyMap[dayKey].checkIns += 1;
+    if (v.rating >= 1 && v.rating <= 5) {
+      dailyMap[dayKey].ratingSum += v.rating;
+      dailyMap[dayKey].ratingN += 1;
+      ratingBuckets[Math.round(v.rating)] = (ratingBuckets[Math.round(v.rating)] || 0) + 1;
+    }
+    hourCounts[date.getHours()] += 1;
+    uniqueUsers.add(v.userId || "anon");
+  }
+
+  const daily = [];
+  for (let d = 89; d >= 0; d--) {
+    const date = new Date(now); date.setDate(date.getDate() - d);
+    const key = date.toISOString().split("T")[0];
+    const entry = dailyMap[key];
+    daily.push({
+      date: key, label: `${date.getMonth()+1}/${date.getDate()}`,
+      visitors: entry ? entry.users.size : 0,
+      checkIns: entry ? entry.checkIns : 0,
+      avgRating: entry && entry.ratingN > 0 ? +(entry.ratingSum / entry.ratingN).toFixed(1) : 0,
+    });
+  }
+
+  const hourly = Array.from({ length: 24 }, (_, h) => ({ hour: `${h}:00`, visitors: hourCounts[h] }));
+  const totalRated = Object.values(ratingBuckets).reduce((a, b) => a + b, 0);
+  const ratings = totalRated > 0 ? [5,4,3,2,1].map((s, i) => ({
+    stars: s === 1 ? "1 star" : `${s} stars`,
+    count: Math.round(ratingBuckets[s] / totalRated * 100),
+    color: ["#16a34a","#84cc16","#f59e0b","#f97316","#ef4444"][i],
+  })) : emptyRatings;
+
+  const last30 = daily.slice(-30);
+  const prev30 = daily.slice(-60, -30);
+  const c30 = last30.reduce((s, d) => s + d.checkIns, 0);
+  const cp30 = prev30.reduce((s, d) => s + d.checkIns, 0);
+  const v30 = last30.reduce((s, d) => s + d.visitors, 0);
+  const vp30 = prev30.reduce((s, d) => s + d.visitors, 0);
+  const rated30 = last30.filter(d => d.avgRating > 0);
+  const ar30 = rated30.length > 0 ? +(rated30.reduce((s, d) => s + d.avgRating, 0) / rated30.length).toFixed(1) : 0;
+  const safePct = (curr, prev) => {
+    if (!Number.isFinite(curr) || !Number.isFinite(prev) || prev === 0) return 0;
+    return +((curr - prev) / prev * 100).toFixed(1);
+  };
+
+  return {
+    daily, hourly, ratings, sources: [],
+    kpi: {
+      visitors: { value: v30, change: safePct(v30, vp30) },
+      checkIns: { value: c30, change: safePct(c30, cp30) },
+      avgRating: { value: ar30, change: 0 },
+      trailAppearances: { value: trailCount, change: 0 },
+    },
+    isEmpty: false, totalVisits: visits.length, uniqueVisitors: uniqueUsers.size,
+  };
+}
+
 export default function DashboardShell({ user, ownerProfile, winery }) {
   const [page, setPage] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [visits, setVisits] = useState(null);
+  const [loadingVisits, setLoadingVisits] = useState(true);
 
   // Winery is now passed as a prop from App.jsx (loaded from Firestore).
   // Fallback to a minimal record if somehow missing.
@@ -36,15 +138,26 @@ export default function DashboardShell({ user, ownerProfile, winery }) {
     price: "$$",
   };
 
-  // CRITICAL: Normalize the winery ID to a finite number.
-  // If ownerProfile.wineryId is NaN (from a bad claim approval), or the
-  // winery record has a non-numeric ID, generateDemoData would produce NaN
-  // for every KPI. We catch that here and fall back to a safe seed.
+  // Safe numeric ID for analytics computation
   const rawId = Number(displayWinery.id ?? displayWinery.wineryId ?? ownerProfile.wineryId);
   const safeWineryId = Number.isFinite(rawId) && rawId >= 1 ? rawId : 1;
 
   const tier = ownerProfile.tier || "free";
-  const data = useMemo(() => generateDemoData(safeWineryId), [safeWineryId]);
+
+  // MIGRATION: Load real visit data from Firestore instead of using generateDemoData()
+  useEffect(() => {
+    setLoadingVisits(true);
+    getWineryVisits(safeWineryId)
+      .then(setVisits)
+      .catch(err => { console.error("Failed to load visits:", err); setVisits([]); })
+      .finally(() => setLoadingVisits(false));
+  }, [safeWineryId]);
+
+  // Compute real analytics from Firestore visits
+  const data = useMemo(
+    () => computeRealAnalytics(visits || [], safeWineryId),
+    [visits, safeWineryId]
+  );
 
   const navItems = [
     { id: "overview", label: "Overview", icon: BarChart3 },

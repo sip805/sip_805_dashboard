@@ -130,6 +130,25 @@ export async function getWineryById(wineryId) {
   };
 }
 
+// == Real Visit Analytics ======================================
+// Fetch actual visit records for a winery from Firestore.
+// This replaces the demo data generator for production use.
+
+export async function getWineryVisits(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return [];
+  const q = query(
+    collection(db, "visits"),
+    where("wineryId", "==", numId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({
+    id: d.id, ...d.data(),
+    date: d.data().createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+  }));
+}
+
 // == Winery Owner Profile ======================================
 
 export async function getOwnerProfile(uid) {

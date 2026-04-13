@@ -3,6 +3,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { WINERIES } from "../../data/wineries.js";
 import { KpiCard, PremiumLock } from "./OverviewPage.jsx";
 
+// MIGRATION: BenchmarkPage intentionally uses static WINERIES for structural
+// catalog data (ratings, reviews, region, price) — these are not analytics.
+// Future enhancement: accept merged Firestore+static winery list as a prop.
+
 export default function BenchmarkPage({ data, winery, tier }) {
   const region = WINERIES.filter(w => w.region === winery.region).sort((a, b) => b.rating - a.rating);
   const rr = region.findIndex(w => w.id === winery.id) + 1;

@@ -142,10 +142,11 @@ export const TRAILS = [
   { id: 6, name: "Dog-Friendly Trail", stops: [2, 7, 22, 19, 17, 26] },
 ];
 
-// Deterministic demo data generator — same seed = same output.
-// IMPORTANT: wineryId MUST be a finite number for math to work.
-// If an invalid ID slips through (NaN, undefined, string), we
-// fall back to a safe seed so the dashboard never renders NaN.
+// ── DEPRECATED: Demo Data Generator ──────────────────────────
+// This function is NO LONGER used in production dashboard views.
+// Real analytics are now computed from Firestore visits data
+// in DashboardShell.jsx via computeRealAnalytics().
+// Kept here only as a reference and for potential demo/preview modes.
 export function generateDemoData(wineryId) {
   const numericId = Number(wineryId);
   const safeId = Number.isFinite(numericId) && numericId >= 1 ? numericId : 1;
