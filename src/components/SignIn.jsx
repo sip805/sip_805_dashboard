@@ -4,14 +4,36 @@
 // ==============================================================
 
 import { useState } from "react";
-import { Wine, AlertCircle } from "lucide-react";
-import { signInWithEmail, signInWithGoogle } from "../firebaseClient.js";
+import { Wine, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+import { signInWithEmail, signInWithGoogle, sendPasswordReset } from "../firebaseClient.js";
 
 export default function SignIn({ onSwitchToSignUp }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState("signin"); // "signin" | "forgot"
+  const [resetSent, setResetSent] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setResetLoading(true);
+    try {
+      await sendPasswordReset(email);
+      setResetSent(true);
+    } catch (err) {
+      // Show a generic success regardless to avoid leaking which emails exist.
+      // Only surface errors for invalid-email format.
+      if (err.code === "auth/invalid-email") {
+        setError("Please enter a valid email address.");
+      } else {
+        setResetSent(true);
+      }
+    }
+    setResetLoading(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -38,6 +60,70 @@ export default function SignIn({ onSwitchToSignUp }) {
     }
   };
 
+  if (mode === "forgot") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 mb-4">
+              <img src="/icon-512.png" alt="Sip805" width={40} height={40} className="rounded-xl" style={{ objectFit: "contain" }} />
+              <span className="text-2xl font-bold text-white tracking-tight">Sip805</span>
+            </div>
+            <h1 className="text-xl font-bold text-white">Reset Your Password</h1>
+            <p className="text-purple-200 text-sm mt-1">We'll email you a secure reset link</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            {resetSent ? (
+              <div className="text-center space-y-4 py-2">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">Check your inbox</h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    If an account exists for <span className="font-medium text-gray-700">{email}</span>,
+                    you'll receive a password reset link shortly. The link expires in 1 hour.
+                  </p>
+                </div>
+                <p className="text-xs text-gray-400">Didn't get it? Check your spam folder.</p>
+                <button onClick={() => { setMode("signin"); setResetSent(false); setError(""); }}
+                  className="w-full bg-purple-600 text-white font-semibold py-3 rounded-lg hover:bg-purple-700 transition">
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <button type="button" onClick={() => { setMode("signin"); setError(""); }}
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition">
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
+                </button>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">Email</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus
+                    className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+                    placeholder="you@winery.com" />
+                  <p className="text-xs text-gray-400 mt-1.5">Enter the email you used to sign up.</p>
+                </div>
+
+                {error && (
+                  <div className="flex items-start gap-2 text-xs text-red-500 bg-red-50 p-3 rounded-lg">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> <span>{error}</span>
+                  </div>
+                )}
+
+                <button type="submit" disabled={resetLoading || !email.trim()}
+                  className="w-full bg-purple-600 text-white font-semibold py-3 rounded-lg hover:bg-purple-700 transition disabled:opacity-50">
+                  {resetLoading ? "Sending..." : "Send Reset Link"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-purple-800 to-indigo-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -59,7 +145,13 @@ export default function SignIn({ onSwitchToSignUp }) {
                 placeholder="you@winery.com" />
             </div>
             <div>
-              <label className="text-xs text-gray-500 block mb-1">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-gray-500">Password</label>
+                <button type="button" onClick={() => { setMode("forgot"); setError(""); setResetSent(false); }}
+                  className="text-xs text-purple-600 font-medium hover:underline">
+                  Forgot password?
+                </button>
+              </div>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
                 className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
                 placeholder="Enter your password" />
