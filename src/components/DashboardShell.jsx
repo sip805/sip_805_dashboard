@@ -20,6 +20,7 @@ import TrafficPage from "./pages/TrafficPage.jsx";
 import TrailsPage from "./pages/TrailsPage.jsx";
 import BenchmarkPage from "./pages/BenchmarkPage.jsx";
 import ProfileSettings from "./ProfileSettings.jsx";
+import WineMenuPage from "./WineMenuPage.jsx";
 import UpgradePage from "./UpgradePage.jsx";
 
 // ── Real Analytics from Firestore Visits ──────────────────────
@@ -179,6 +180,7 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
     { id: "trails", label: "Trails", icon: Map },
     { id: "benchmark", label: "Benchmark", icon: Award },
     { id: "profile", label: "Edit Profile", icon: Pencil },
+    { id: "menu", label: "Wine Menu", icon: Wine },
     { id: "settings", label: "Settings", icon: Settings },
     { id: "upgrade", label: "Upgrade", icon: Crown, highlight: tier === "free" },
   ];
@@ -264,6 +266,7 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
             {page === "trails" && <TrailsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
             {page === "benchmark" && <BenchmarkPage data={data} winery={displayWinery} tier={tier} />}
             {page === "profile" && <ProfileSettings winery={displayWinery} user={user} tier={tier} />}
+            {page === "menu" && <WineMenuPage winery={displayWinery} user={user} />}
             {page === "settings" && <SettingsPage winery={displayWinery} tier={tier} onUpgrade={() => setPage("upgrade")} onLogout={handleLogout} />}
             {page === "upgrade" && <UpgradePage winery={displayWinery} tier={tier} />}
           </div>
