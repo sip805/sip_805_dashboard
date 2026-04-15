@@ -22,8 +22,8 @@ import {
   signOut, onAuthStateChanged, sendPasswordResetEmail
 } from "firebase/auth";
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc,
-  collection, query, where, getDocs, orderBy,
+  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  collection, addDoc, query, where, getDocs, orderBy,
   serverTimestamp
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -352,6 +352,118 @@ export async function saveProfileEdits(wineryId, edits, userId) {
   }, { merge: true });
 
   return { success: true, errors: {} };
+}
+
+// == Wine Menu =================================================
+// Owners manage a list of wines per winery. Stored in top-level
+// "wineryWines" collection (one doc per wine) with a numeric
+// wineryId field so consumer queries can fetch a winery's menu
+// in one shot. All writes require a valid owner session.
+
+const WINE_TYPES = ["red", "white", "rose", "sparkling", "dessert", "fortified"];
+const WINE_TIERS = ["", "estate", "reserve", "single_vineyard", "club", "library"];
+const WINE_AVAILABILITY = ["in_stock", "sold_out", "club_only", "coming_soon"];
+
+export function validateWine(wine) {
+  const errors = {};
+  if (!wine.name || wine.name.trim().length < 2) errors.name = "Name is required.";
+  if (wine.name && wine.name.length > 80) errors.name = "Name must be under 80 characters.";
+  if (!wine.varietal || wine.varietal.trim().length < 2) errors.varietal = "Varietal is required.";
+  if (!WINE_TYPES.includes(wine.type)) errors.type = "Pick a wine type.";
+  const year = Number(wine.vintage);
+  const thisYear = new Date().getFullYear();
+  if (!Number.isFinite(year) || year < 1900 || year > thisYear + 1) errors.vintage = "Enter a valid vintage year.";
+  const abv = Number(wine.abv);
+  if (!Number.isFinite(abv) || abv < 0 || abv > 25) errors.abv = "ABV must be 0–25%.";
+  const price = Number(wine.price);
+  if (!Number.isFinite(price) || price < 0 || price > 10000) errors.price = "Enter a valid price.";
+  if (!wine.description || wine.description.trim().length < 10) errors.description = "Description must be at least 10 characters.";
+  if (wine.description && wine.description.length > 600) errors.description = "Description must be under 600 characters.";
+  if (wine.tier && !WINE_TIERS.includes(wine.tier)) errors.tier = "Invalid tier.";
+  if (wine.availability && !WINE_AVAILABILITY.includes(wine.availability)) errors.availability = "Invalid availability.";
+  if (wine.sweetness != null && wine.sweetness !== "") {
+    const s = Number(wine.sweetness);
+    if (!Number.isFinite(s) || s < 1 || s > 5) errors.sweetness = "Sweetness must be 1–5.";
+  }
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
+/** Fetch every wine for a winery, sorted by sortOrder then name. */
+export async function getWineryWines(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return [];
+  const q = query(collection(db, "wineryWines"), where("wineryId", "==", numId));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999) || (a.name || "").localeCompare(b.name || ""));
+}
+
+/** Add a new wine to a winery's menu. Validates before writing. */
+export async function addWine(wineryId, wine, userId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return { success: false, errors: { general: "Invalid winery ID." } };
+  const { valid, errors } = validateWine(wine);
+  if (!valid) return { success: false, errors };
+  const doc = {
+    wineryId: numId,
+    name: wine.name.trim(),
+    varietal: wine.varietal.trim(),
+    type: wine.type,
+    vintage: Number(wine.vintage),
+    abv: Number(wine.abv),
+    price: Number(wine.price),
+    bottleSize: wine.bottleSize?.trim() || "750ml",
+    description: wine.description.trim(),
+    appellation: wine.appellation?.trim() || "",
+    aging: wine.aging?.trim() || "",
+    pairings: Array.isArray(wine.pairings) ? wine.pairings.filter(Boolean) : [],
+    bottlesProduced: wine.bottlesProduced ? Number(wine.bottlesProduced) : 0,
+    tier: wine.tier || "",
+    availability: wine.availability || "in_stock",
+    awards: wine.awards?.trim() || "",
+    sweetness: wine.sweetness ? Number(wine.sweetness) : 0,
+    sortOrder: wine.sortOrder != null ? Number(wine.sortOrder) : 100,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    createdBy: userId,
+  };
+  const ref = await addDoc(collection(db, "wineryWines"), doc);
+  return { success: true, id: ref.id, errors: {} };
+}
+
+/** Update an existing wine. Only the provided fields are written. */
+export async function updateWine(wineId, updates, userId) {
+  // Validate the *merged* view so partial updates still enforce constraints
+  const { valid, errors } = validateWine(updates);
+  if (!valid) return { success: false, errors };
+  const clean = {
+    ...updates,
+    name: updates.name?.trim(),
+    varietal: updates.varietal?.trim(),
+    description: updates.description?.trim(),
+    appellation: updates.appellation?.trim() || "",
+    aging: updates.aging?.trim() || "",
+    awards: updates.awards?.trim() || "",
+    vintage: Number(updates.vintage),
+    abv: Number(updates.abv),
+    price: Number(updates.price),
+    bottlesProduced: updates.bottlesProduced ? Number(updates.bottlesProduced) : 0,
+    sweetness: updates.sweetness ? Number(updates.sweetness) : 0,
+    sortOrder: updates.sortOrder != null ? Number(updates.sortOrder) : 100,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  };
+  delete clean.id;
+  delete clean.createdAt;
+  delete clean.createdBy;
+  await updateDoc(doc(db, "wineryWines", wineId), clean);
+  return { success: true, errors: {} };
+}
+
+export async function deleteWine(wineId) {
+  await deleteDoc(doc(db, "wineryWines", wineId));
+  return { success: true };
 }
 
 export async function uploadPhoto(wineryId, file) {
