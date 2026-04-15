@@ -98,7 +98,7 @@ const InteractiveDemo = () => {
         {/* Mini sidebar */}
         <div className="w-48 bg-gray-50 border-r border-gray-100 p-3 hidden sm:block">
           <div className="flex items-center gap-2 px-3 py-2 mb-4">
-            <Wine className="w-5 h-5 text-purple-600" />
+            <img src="/icon-512.png" alt="Sip805" width={22} height={22} className="rounded-md" style={{ objectFit: "contain" }} />
             <span className="text-sm font-bold text-gray-900">Sip805</span>
           </div>
           {tabs.map(t => (
@@ -457,7 +457,7 @@ export default function Landing({ onSignUp, onSignIn }) {
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Wine className="w-6 h-6 text-purple-600" />
+            <img src="/icon-512.png" alt="Sip805" width={28} height={28} className="rounded-lg" style={{ objectFit: "contain" }} />
             <span className="text-lg font-bold text-gray-900">Sip805</span>
             <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-semibold ml-1">FOR WINERIES</span>
           </div>
@@ -611,7 +611,7 @@ export default function Landing({ onSignUp, onSignIn }) {
       <footer className="bg-gray-900 text-gray-400 py-10 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Wine className="w-5 h-5 text-purple-400" />
+            <img src="/icon-512.png" alt="Sip805" width={22} height={22} className="rounded-md" style={{ objectFit: "contain" }} />
             <span className="text-sm font-bold text-white">Sip805</span>
             <span className="text-xs text-gray-500">Winery Dashboard</span>
           </div>
