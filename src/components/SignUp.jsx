@@ -50,7 +50,7 @@ export default function SignUp({ onSwitchToSignIn }) {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-4">
-            <Wine className="w-8 h-8 text-white" />
+            <img src="/icon-512.png" alt="Sip805" width={40} height={40} className="rounded-xl" style={{ objectFit: "contain" }} />
             <span className="text-2xl font-bold text-white tracking-tight">Sip805</span>
           </div>
           <h1 className="text-xl font-bold text-white">Create Your Account</h1>

@@ -194,7 +194,7 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
         <div className="p-4 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Wine className="w-5 h-5 text-purple-600" />
+              <img src="/icon-512.png" alt="Sip805" width={22} height={22} className="rounded-md" style={{ objectFit: "contain" }} />
               <span className="text-base font-bold">Sip805</span>
             </div>
             <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
