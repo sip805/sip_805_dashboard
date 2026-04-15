@@ -19,7 +19,7 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth, GoogleAuthProvider, signInWithPopup,
   signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, onAuthStateChanged
+  signOut, onAuthStateChanged, sendPasswordResetEmail
 } from "firebase/auth";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc,
@@ -47,6 +47,17 @@ const googleProvider = new GoogleAuthProvider();
 // == Auth ======================================================
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
+
+/**
+ * Send a password reset email to the given address. Firebase handles the
+ * email delivery, token generation, and reset page. Caller should show a
+ * generic success message regardless of whether the email exists, to avoid
+ * leaking which emails are registered.
+ */
+export async function sendPasswordReset(email) {
+  if (!email || !email.trim()) throw new Error("Email is required");
+  return sendPasswordResetEmail(auth, email.trim());
+}
 
 export async function signInWithEmail(email, password) {
   try {
@@ -288,7 +299,25 @@ export function validateEdits(edits) {
     if (!edits.phone || !PHONE_RE.test(edits.phone.trim())) errors.phone = "Phone must be (XXX) XXX-XXXX format.";
   }
   if ("hours" in edits) {
-    if (!edits.hours || edits.hours.trim().length < 5) errors.hours = "Hours can't be blank.";
+    const h = edits.hours;
+    if (h && typeof h === "object" && !Array.isArray(h)) {
+      // Per-day schedule: require at least one day open with valid open<close times
+      const days = ["mon","tue","wed","thu","fri","sat","sun"];
+      const anyOpen = days.some(d => h[d] && !h[d].closed);
+      if (!anyOpen) errors.hours = "Set hours for at least one day.";
+      for (const d of days) {
+        const day = h[d];
+        if (!day || day.closed) continue;
+        if (!day.open || !day.close || day.open >= day.close) {
+          errors.hours = "Each open day needs a valid open and close time.";
+          break;
+        }
+      }
+    } else if (typeof h === "string") {
+      if (!h || h.trim().length < 5) errors.hours = "Hours can't be blank.";
+    } else {
+      errors.hours = "Hours can't be blank.";
+    }
   }
   if ("website" in edits) {
     if (edits.website && !URL_RE.test(edits.website.trim())) errors.website = "Enter a valid website (e.g. yourwinery.com).";
