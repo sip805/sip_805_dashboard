@@ -24,7 +24,7 @@ import {
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, addDoc, query, where, getDocs, orderBy,
-  serverTimestamp
+  serverTimestamp, Timestamp
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -490,4 +490,208 @@ export async function uploadPhoto(wineryId, file) {
   });
 
   return { success: true, url };
+}
+
+// == Leads (inbound release/club/reservation interest) =========
+
+export async function getWineryLeads(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return [];
+  const q = query(
+    collection(db, "leads"),
+    where("wineryId", "==", numId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateLeadStatus(leadId, status) {
+  if (!leadId) throw new Error("leadId required");
+  await updateDoc(doc(db, "leads", leadId), {
+    status,
+    statusUpdatedAt: serverTimestamp(),
+  });
+}
+
+// == Announcements (winery publishes, consumer reads) ==========
+
+export async function getWineryAnnouncements(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return [];
+  const q = query(
+    collection(db, "announcements"),
+    where("wineryId", "==", numId),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function publishAnnouncement(wineryId, wineryName, payload) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) throw new Error("invalid wineryId");
+  const doc = {
+    wineryId: numId,
+    wineryName: wineryName || "",
+    title: String(payload.title || "").slice(0, 120),
+    body: String(payload.body || "").slice(0, 1000),
+    kind: payload.kind || "general", // "release" | "event" | "general"
+    startsAt: payload.startsAt ? Timestamp.fromDate(new Date(payload.startsAt)) : null,
+    endsAt: payload.endsAt ? Timestamp.fromDate(new Date(payload.endsAt)) : null,
+    status: payload.status || "published",
+    createdAt: serverTimestamp(),
+  };
+  return addDoc(collection(db, "announcements"), doc);
+}
+
+export async function updateAnnouncement(announcementId, updates) {
+  if (!announcementId) throw new Error("id required");
+  const payload = {};
+  if (updates.title != null) payload.title = String(updates.title).slice(0, 120);
+  if (updates.body != null) payload.body = String(updates.body).slice(0, 1000);
+  if (updates.kind) payload.kind = updates.kind;
+  if (updates.status) payload.status = updates.status;
+  if (updates.startsAt !== undefined) payload.startsAt = updates.startsAt ? Timestamp.fromDate(new Date(updates.startsAt)) : null;
+  if (updates.endsAt !== undefined) payload.endsAt = updates.endsAt ? Timestamp.fromDate(new Date(updates.endsAt)) : null;
+  payload.updatedAt = serverTimestamp();
+  await updateDoc(doc(db, "announcements", announcementId), payload);
+}
+
+export async function deleteAnnouncement(announcementId) {
+  if (!announcementId) return;
+  await deleteDoc(doc(db, "announcements", announcementId));
+}
+
+// == Trail plan analytics (for plan-to-visit attribution) ======
+// Returns the count of user trails that include this winery as a stop.
+// IMPORTANT: this reads across all users' subcollections; requires
+// collectionGroup query enabled in Firestore. Falls back to 0 if unavailable.
+
+export async function getTrailInclusionsForWinery(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return { count: 0, visitedCount: 0 };
+  try {
+    const cgQ = query(
+      collection(db, "userTrails"),
+    );
+    // NOTE: best-effort — actual implementation uses collectionGroup("trails")
+    // once the index is deployed. For now, return a safe zero.
+    // This function exists so dashboard UI can bind to it immediately.
+    return { count: 0, visitedCount: 0 };
+  } catch (e) {
+    return { count: 0, visitedCount: 0 };
+  }
+}
+
+// == Reservations (Pro-only) ===================================
+// Slot-based booking system. Availability is configured per-winery,
+// consumers pick a time slot, reservation is auto-confirmed. Email
+// notifications are dispatched by a Cloud Function onCreate.
+//
+// Availability is stored on wineryProfiles/{wineryId}.reservationSettings.
+// Reservations are stored in the top-level `reservations` collection.
+
+export const DEFAULT_RESERVATION_SETTINGS = {
+  enabled: false,
+  // Sun..Sat — closed by default; winery opts in per day.
+  weeklyHours: [
+    { dayOfWeek: 0, isOpen: false, openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 1, isOpen: false, openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 2, isOpen: false, openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 3, isOpen: false, openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 4, isOpen: false, openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 5, isOpen: true,  openTime: "11:00", closeTime: "17:00" },
+    { dayOfWeek: 6, isOpen: true,  openTime: "11:00", closeTime: "17:00" },
+  ],
+  slotDurationMinutes: 30,          // grid granularity
+  tastingDurationMinutes: 60,       // how long each booking blocks capacity
+  maxPartySize: 8,
+  concurrentCapacity: 4,            // max simultaneous parties in one slot
+  leadTimeHours: 24,                // minimum advance notice
+  advanceBookingDays: 60,           // how far out guests can book
+  timezone: "America/Los_Angeles",
+  notes: "",                        // optional message shown on the slot picker
+};
+
+/**
+ * Read this winery's reservation settings. Falls back to safe defaults
+ * (disabled) if the profile doc doesn't have a reservationSettings block yet.
+ */
+export async function getReservationSettings(wineryId) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return { ...DEFAULT_RESERVATION_SETTINGS };
+  try {
+    const snap = await getDoc(doc(db, "wineryProfiles", String(numId)));
+    const data = snap.exists() ? snap.data() : {};
+    const settings = data.reservationSettings || {};
+    return { ...DEFAULT_RESERVATION_SETTINGS, ...settings };
+  } catch (e) {
+    return { ...DEFAULT_RESERVATION_SETTINGS };
+  }
+}
+
+/**
+ * Persist reservation settings for this winery. Merges into wineryProfiles
+ * doc (creates it if needed). Caller is responsible for Pro-tier gating.
+ */
+export async function saveReservationSettings(wineryId, settings) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) throw new Error("invalid wineryId");
+  const safe = {
+    enabled: !!settings.enabled,
+    weeklyHours: Array.isArray(settings.weeklyHours)
+      ? settings.weeklyHours.slice(0, 7).map((h, i) => ({
+          dayOfWeek: i,
+          isOpen: !!h?.isOpen,
+          openTime: typeof h?.openTime === "string" ? h.openTime.slice(0, 5) : "11:00",
+          closeTime: typeof h?.closeTime === "string" ? h.closeTime.slice(0, 5) : "17:00",
+        }))
+      : DEFAULT_RESERVATION_SETTINGS.weeklyHours,
+    slotDurationMinutes: Math.max(15, Math.min(120, Number(settings.slotDurationMinutes) || 30)),
+    tastingDurationMinutes: Math.max(15, Math.min(240, Number(settings.tastingDurationMinutes) || 60)),
+    maxPartySize: Math.max(1, Math.min(30, Number(settings.maxPartySize) || 8)),
+    concurrentCapacity: Math.max(1, Math.min(50, Number(settings.concurrentCapacity) || 4)),
+    leadTimeHours: Math.max(0, Math.min(168, Number(settings.leadTimeHours) || 24)),
+    advanceBookingDays: Math.max(1, Math.min(365, Number(settings.advanceBookingDays) || 60)),
+    timezone: typeof settings.timezone === "string" ? settings.timezone.slice(0, 64) : "America/Los_Angeles",
+    notes: String(settings.notes || "").slice(0, 500),
+  };
+  await setDoc(doc(db, "wineryProfiles", String(numId)), {
+    reservationSettings: safe,
+    reservationSettingsUpdatedAt: serverTimestamp(),
+  }, { merge: true });
+  return safe;
+}
+
+/**
+ * List reservations for this winery within the given window.
+ * `fromDate` and `toDate` are JS Date instances (inclusive from, exclusive to).
+ * Returns docs sorted by slotStart ascending.
+ */
+export async function getWineryReservations(wineryId, fromDate, toDate) {
+  const numId = safeNumericWineryId(wineryId);
+  if (numId === null) return [];
+  const constraints = [where("wineryId", "==", numId)];
+  if (fromDate) constraints.push(where("slotStart", ">=", Timestamp.fromDate(fromDate)));
+  if (toDate)   constraints.push(where("slotStart", "<",  Timestamp.fromDate(toDate)));
+  constraints.push(orderBy("slotStart", "asc"));
+  const q = query(collection(db, "reservations"), ...constraints);
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/**
+ * Winery-side status mutation. Used to mark completed, no_show, or to cancel
+ * on behalf of the guest (e.g. when the winery closes unexpectedly).
+ */
+export async function updateReservationStatus(reservationId, status, opts = {}) {
+  if (!reservationId) throw new Error("reservationId required");
+  const payload = { status, statusUpdatedAt: serverTimestamp() };
+  if (status === "cancelled") {
+    payload.cancelledAt = serverTimestamp();
+    payload.cancelledBy = opts.cancelledBy || "winery";
+    if (opts.reason) payload.cancelReason = String(opts.reason).slice(0, 500);
+  }
+  await updateDoc(doc(db, "reservations", reservationId), payload);
 }

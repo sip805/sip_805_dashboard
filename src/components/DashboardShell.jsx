@@ -11,7 +11,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   BarChart3, Activity, Map, Award, Settings, Crown, Bell,
-  MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle, CheckCircle, Eye
+  MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle, CheckCircle, Eye,
+  Inbox, Megaphone, Sparkles, CalendarCheck
 } from "lucide-react";
 import { TRAILS as STATIC_TRAILS } from "../data/wineries.js";
 import { logOut, getWineryVisits } from "../firebaseClient.js";
@@ -19,6 +20,10 @@ import OverviewPage from "./pages/OverviewPage.jsx";
 import TrafficPage from "./pages/TrafficPage.jsx";
 import TrailsPage from "./pages/TrailsPage.jsx";
 import BenchmarkPage from "./pages/BenchmarkPage.jsx";
+import InsightsPage from "./pages/InsightsPage.jsx";
+import LeadsPage from "./pages/LeadsPage.jsx";
+import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
+import ReservationsPage from "./pages/ReservationsPage.jsx";
 import ProfileSettings from "./ProfileSettings.jsx";
 import WineMenuPage from "./WineMenuPage.jsx";
 import UpgradePage from "./UpgradePage.jsx";
@@ -120,6 +125,9 @@ function computeRealAnalytics(visits, wineryId, trails) {
       trailAppearances: { value: trailCount, change: 0 },
     },
     isEmpty: false, totalVisits: visits.length, uniqueVisitors: uniqueUsers.size,
+    // Raw visit records — InsightsPage consumes these for wine-level ratings,
+    // spend-bucket distribution, and tasting-note feeds.
+    rawVisits: visits,
   };
 }
 
@@ -177,6 +185,10 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
   const navItems = [
     { id: "overview", label: "Overview", icon: BarChart3 },
     { id: "traffic", label: "Traffic", icon: Activity },
+    { id: "insights", label: "Insights", icon: Sparkles },
+    { id: "leads", label: "Leads", icon: Inbox },
+    { id: "reservations", label: "Reservations", icon: CalendarCheck },
+    { id: "announcements", label: "Announcements", icon: Megaphone },
     { id: "trails", label: "Trails", icon: Map },
     { id: "benchmark", label: "Benchmark", icon: Award },
     { id: "profile", label: "Edit Profile", icon: Pencil },
@@ -263,6 +275,10 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
           <div className="max-w-5xl mx-auto">
             {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} />}
             {page === "traffic" && <TrafficPage data={data} winery={displayWinery} tier={tier} />}
+            {page === "insights" && <InsightsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
+            {page === "leads" && <LeadsPage winery={displayWinery} tier={tier} />}
+            {page === "reservations" && <ReservationsPage winery={displayWinery} tier={tier} />}
+            {page === "announcements" && <AnnouncementsPage winery={displayWinery} tier={tier} />}
             {page === "trails" && <TrailsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
             {page === "benchmark" && <BenchmarkPage data={data} winery={displayWinery} tier={tier} />}
             {page === "profile" && <ProfileSettings winery={displayWinery} user={user} tier={tier} />}
