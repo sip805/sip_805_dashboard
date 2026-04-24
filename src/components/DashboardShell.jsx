@@ -27,6 +27,7 @@ import ReservationsPage from "./pages/ReservationsPage.jsx";
 import ProfileSettings from "./ProfileSettings.jsx";
 import WineMenuPage from "./WineMenuPage.jsx";
 import UpgradePage from "./UpgradePage.jsx";
+import { tierLabel, tierShortLabel } from "../lib/tier.js";
 
 // ── Real Analytics from Firestore Visits ──────────────────────
 // MIGRATION COMPLETE: Replaces generateDemoData() for production.
@@ -237,7 +238,7 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-gray-900 truncate">{displayWinery.name}</div>
-              <div className="text-[10px] text-gray-400">{tier === "pro" ? "Pro Plan" : "Free Plan"}</div>
+              <div className="text-[10px] text-gray-400">{tierLabel(tier)}</div>
             </div>
           </div>
           <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-red-500 hover:bg-red-50 transition mt-1">
@@ -298,7 +299,7 @@ const SettingsPage = ({ winery, tier, onUpgrade, onLogout }) => (
     <div className="bg-white rounded-2xl border border-gray-100 p-4">
       <h3 className="text-sm font-semibold text-gray-900 mb-3">Winery Profile</h3>
       <div className="grid grid-cols-2 gap-3">
-        {[["Winery Name", winery.name], ["Region", winery.region], ["Price Tier", winery.price], ["Plan", tier === "pro" ? "Pro" : "Free"]].map(([l, v]) => (
+        {[["Winery Name", winery.name], ["Region", winery.region], ["Price Tier", winery.price], ["Plan", tierShortLabel(tier)]].map(([l, v]) => (
           <div key={l}>
             <label className="text-xs text-gray-400 block mb-0.5">{l}</label>
             <div className="text-sm font-medium text-gray-700 bg-gray-50 rounded-lg px-3 py-2">{v}</div>

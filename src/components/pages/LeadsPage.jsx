@@ -12,6 +12,7 @@ import {
   Inbox, Filter, MessageSquare, Lock
 } from "lucide-react";
 import { getWineryLeads, updateLeadStatus } from "../../firebaseClient.js";
+import { hasPro } from "../../lib/tier.js";
 
 const TYPE_META = {
   release_alert: {
@@ -55,7 +56,7 @@ export default function LeadsPage({ winery, tier }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [busyId, setBusyId] = useState("");
 
-  const isPro = tier === "pro";
+  const isPro = hasPro(tier);
   const wineryId = winery?.id ?? winery?.wineryId;
 
   useEffect(() => {

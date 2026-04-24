@@ -15,6 +15,7 @@ import {
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from "recharts";
+import { hasPro } from "../../lib/tier.js";
 
 const SPEND_LABEL = {
   none:    "Just tasting",
@@ -113,7 +114,7 @@ const StatCard = ({ icon: Icon, label, value, sub, color = "purple" }) => {
 
 export default function InsightsPage({ data, winery, tier, trails }) {
   const visits = data?.rawVisits || [];
-  const isPro = tier === "pro";
+  const isPro = hasPro(tier);
 
   const wineRollup = useMemo(() => computeWineRatingRollup(visits), [visits]);
   const spend = useMemo(() => computeSpendDistribution(visits), [visits]);

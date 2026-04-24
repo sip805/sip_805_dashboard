@@ -6,6 +6,7 @@
 // ══════════════════════════════════════════════════════════════
 
 import { Crown, Check, X, Zap, TrendingUp, Target, Map, BarChart3, Eye } from "lucide-react";
+import { hasPro, tierLabel } from "../lib/tier.js";
 
 const plans = [
   {
@@ -54,7 +55,9 @@ const highlights = [
 ];
 
 export default function UpgradePage({ winery, tier }) {
-  if (tier === "pro") {
+  // Pro and Enterprise both mean "nothing to upgrade to" here — show the
+  // current-plan confirmation card instead of the comparison table.
+  if (hasPro(tier)) {
     return (
       <div className="space-y-5">
         <div>
@@ -65,7 +68,7 @@ export default function UpgradePage({ winery, tier }) {
           <div className="w-14 h-14 rounded-2xl bg-purple-100 flex items-center justify-center mx-auto mb-4">
             <Crown className="w-7 h-7 text-purple-600" />
           </div>
-          <h3 className="text-lg font-bold text-gray-900">You're on the Pro Plan</h3>
+          <h3 className="text-lg font-bold text-gray-900">You're on the {tierLabel(tier)}</h3>
           <p className="text-sm text-gray-500 mt-1">All premium features are unlocked for {winery.name}.</p>
           <div className="mt-4 inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
             <Check className="w-3.5 h-3.5" /> Active

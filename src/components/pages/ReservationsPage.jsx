@@ -24,6 +24,7 @@ import {
   updateReservationStatus,
   DEFAULT_RESERVATION_SETTINGS,
 } from "../../firebaseClient.js";
+import { hasPro } from "../../lib/tier.js";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -59,7 +60,7 @@ function groupByDate(reservations) {
 
 export default function ReservationsPage({ winery, tier }) {
   const wineryId = winery?.id ?? winery?.wineryId;
-  const isPro = tier === "pro";
+  const isPro = hasPro(tier);
 
   const [settings, setSettings] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
