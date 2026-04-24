@@ -27,7 +27,7 @@ import ReservationsPage from "./pages/ReservationsPage.jsx";
 import ProfileSettings from "./ProfileSettings.jsx";
 import WineMenuPage from "./WineMenuPage.jsx";
 import UpgradePage from "./UpgradePage.jsx";
-import { tierLabel, tierShortLabel } from "../lib/tier.js";
+import { tierLabel, tierShortLabel, hasPro } from "../lib/tier.js";
 
 // ── Real Analytics from Firestore Visits ──────────────────────
 // MIGRATION COMPLETE: Replaces generateDemoData() for production.
@@ -183,19 +183,37 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
     [visits, safeWineryId, trails]
   );
 
-  const navItems = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "traffic", label: "Traffic", icon: Activity },
-    { id: "insights", label: "Insights", icon: Sparkles },
-    { id: "leads", label: "Leads", icon: Inbox },
-    { id: "reservations", label: "Reservations", icon: CalendarCheck },
-    { id: "announcements", label: "Announcements", icon: Megaphone },
-    { id: "trails", label: "Trails", icon: Map },
-    { id: "benchmark", label: "Benchmark", icon: Award },
-    { id: "profile", label: "Edit Profile", icon: Pencil },
-    { id: "menu", label: "Wine Menu", icon: Wine },
-    { id: "settings", label: "Settings", icon: Settings },
-    { id: "upgrade", label: "Upgrade", icon: Crown, highlight: tier === "free" },
+  // Three-section nav. "Today" surfaces the pages a hospitality manager
+  // opens daily; "Grow" is for marketing / analytics; "Manage" is account
+  // plumbing. Upgrade is pulled out of the list and lives as a footer CTA
+  // below (only shown to free-tier owners).
+  const navSections = [
+    {
+      title: "Today",
+      items: [
+        { id: "overview", label: "Overview", icon: BarChart3 },
+        { id: "reservations", label: "Reservations", icon: CalendarCheck },
+        { id: "leads", label: "Leads", icon: Inbox },
+        { id: "announcements", label: "Announcements", icon: Megaphone },
+      ],
+    },
+    {
+      title: "Grow",
+      items: [
+        { id: "insights", label: "Insights", icon: Sparkles },
+        { id: "traffic", label: "Traffic", icon: Activity },
+        { id: "benchmark", label: "Benchmark", icon: Award },
+        { id: "trails", label: "Trails", icon: Map },
+      ],
+    },
+    {
+      title: "Manage",
+      items: [
+        { id: "profile", label: "Edit Profile", icon: Pencil },
+        { id: "menu", label: "Wine Menu", icon: Wine },
+        { id: "settings", label: "Settings", icon: Settings },
+      ],
+    },
   ];
 
   const handleLogout = async () => { await logOut(); };
@@ -219,17 +237,38 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
           <p className="text-[9px] text-purple-500 font-semibold tracking-wider mt-0.5">WINERY DASHBOARD</p>
         </div>
 
-        <nav className="flex-1 p-2.5 space-y-0.5 overflow-y-auto">
-          {navItems.map(item => (
-            <button key={item.id} onClick={() => { setPage(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition
-                ${page === item.id ? "bg-purple-50 text-purple-700" : "text-gray-500 hover:bg-gray-50"}
-                ${item.highlight && page !== item.id ? "text-purple-600" : ""}`}>
-              <item.icon className="w-4 h-4" />
-              {item.label}
-            </button>
+        <nav className="flex-1 p-2.5 space-y-4 overflow-y-auto">
+          {navSections.map(section => (
+            <div key={section.title}>
+              <div className="px-3 mb-1 text-[10px] font-bold text-gray-400 tracking-widest uppercase">
+                {section.title}
+              </div>
+              <div className="space-y-0.5">
+                {section.items.map(item => (
+                  <button key={item.id} onClick={() => { setPage(item.id); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition
+                      ${page === item.id ? "bg-purple-50 text-purple-700" : "text-gray-500 hover:bg-gray-50"}`}>
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
+
+        {/* Upgrade CTA — free-tier only, pulled out of the main nav so Pro and
+            Enterprise owners don't see a nagging upsell. */}
+        {!hasPro(tier) && (
+          <div className="p-2.5 border-t border-gray-100">
+            <button
+              onClick={() => { setPage("upgrade"); setSidebarOpen(false); }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-purple-600 to-rose-500 text-white hover:shadow-md transition"
+            >
+              <Crown className="w-4 h-4" /> Upgrade to Pro
+            </button>
+          </div>
+        )}
 
         <div className="p-2.5 border-t border-gray-100">
           <div className="flex items-center gap-2 px-3 py-2">
@@ -316,9 +355,6 @@ const SettingsPage = ({ winery, tier, onUpgrade, onLogout }) => (
       <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 font-medium px-4 py-2.5 rounded-lg hover:bg-red-50 transition">
         <LogOut className="w-4 h-4" /> Sign Out
       </button>
-    </div>
-  </div>
-);
     </div>
   </div>
 );
