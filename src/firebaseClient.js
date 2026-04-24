@@ -695,3 +695,46 @@ export async function updateReservationStatus(reservationId, status, opts = {}) 
   }
   await updateDoc(doc(db, "reservations", reservationId), payload);
 }
+
+// == Billing Summary ==========================================
+// Query the billingEvents this winery owner has accrued in the
+// current calendar month (PT). Used by the Overview page hero
+// card to show "N new customers this month, worth ~$X."
+//
+// The Cloud Function (onVisitCreated) writes billingEvents with
+// status "pending" | "trial_gated" | "capped" | ... — we count
+// every status that represents a real attributed customer (all
+// except "disputed" and "refunded"), then break the total into
+// paid vs. free so the UI can render the right framing.
+export async function getBillingSummary(wineryOwnerId) {
+  if (!wineryOwnerId) return null;
+
+  // PT month start — match the Cloud Function's month-key boundary.
+  const now = new Date();
+  const ptParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const y = ptParts.find(p => p.type === "year").value;
+  const m = ptParts.find(p => p.type === "month").value;
+  const monthStart = new Date(`${y}-${m}-01T00:00:00-07:00`); // PDT approx; UTC diff is OK for a lower-bound query
+
+  const q = query(
+    collection(db, "billingEvents"),
+    where("wineryOwnerId", "==", wineryOwnerId),
+    where("createdAt", ">=", Timestamp.fromDate(monthStart)),
+  );
+  const snap = await getDocs(q);
+
+  let total = 0, paid = 0, free = 0, capped = 0, spendDollars = 0;
+  snap.forEach(d => {
+    const e = d.data();
+    if (e.status === "disputed" || e.status === "refunded") return;
+    total += 1;
+    if (e.status === "capped") { capped += 1; return; }
+    if (e.isFree) free += 1;
+    else { paid += 1; spendDollars += Number(e.amountDollars) || 0; }
+  });
+
+  return { total, paid, free, capped, spendDollars, monthStart };
+}
