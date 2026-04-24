@@ -12,7 +12,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   BarChart3, Activity, Map, Award, Settings, Crown, Bell,
   MapPin, Menu, X, Wine, Pencil, LogOut, AlertTriangle, CheckCircle, Eye,
-  Inbox, Megaphone, Sparkles, CalendarCheck
+  Inbox, Megaphone, Sparkles, CalendarCheck, CreditCard, ArrowRight
 } from "lucide-react";
 import { TRAILS as STATIC_TRAILS } from "../data/wineries.js";
 import { logOut, getWineryVisits } from "../firebaseClient.js";
@@ -131,6 +131,63 @@ function computeRealAnalytics(visits, wineryId, trails) {
     rawVisits: visits,
   };
 }
+
+// ── Trial-gate banner ──────────────────────────────────────────
+// Shown at the top of every dashboard page when the winery has
+// actively stopped receiving new customers from Sip805 and needs
+// to take action. Two cases:
+//   - Free trial spent and billing not activated → activate billing.
+//   - Last payment failed → update card.
+// We intentionally do NOT show a banner for the "cap hit" case;
+// that's informational, not blocking, and already surfaced on the
+// Overview hero card.
+
+const TrialGateBanner = ({ billing, onNavigate }) => {
+  if (!billing) return null;
+  const enabled      = !!billing.enabled;
+  const paused       = !!billing.pausedByPaymentFailure;
+  const freeRemain   = Number(billing.freeVisitsRemaining ?? 10);
+  const trialSpent   = freeRemain <= 0 && !enabled;
+  if (!paused && !trialSpent) return null;
+
+  const cfg = paused
+    ? {
+        icon: CreditCard,
+        title: "Update your card to keep new customers flowing",
+        body: "Your last payment didn't go through, so we've paused sending you new customers.",
+        cta: "Update card",
+        tone: "bg-red-50 border-red-200 text-red-900",
+        btn: "bg-red-600 hover:bg-red-700",
+      }
+    : {
+        icon: AlertTriangle,
+        title: "Your free trial is complete",
+        body: "Activate pay-per-visit to keep receiving verified first-time visitors from Sip805.",
+        cta: "Activate billing",
+        tone: "bg-amber-50 border-amber-200 text-amber-900",
+        btn: "bg-amber-600 hover:bg-amber-700",
+      };
+
+  const Icon = cfg.icon;
+  return (
+    <div className={`mb-4 rounded-xl border p-3 flex items-center gap-3 ${cfg.tone}`}>
+      <div className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold leading-tight">{cfg.title}</div>
+        <div className="text-xs opacity-80 mt-0.5 leading-snug">{cfg.body}</div>
+      </div>
+      <button
+        type="button"
+        onClick={() => (typeof onNavigate === "function" ? onNavigate("upgrade") : null)}
+        className={`flex-shrink-0 px-3 py-1.5 ${cfg.btn} text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition`}
+      >
+        {cfg.cta} <ArrowRight className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
 
 export default function DashboardShell({ user, ownerProfile, winery, firestoreTrails }) {
   const [page, setPage] = useState("overview");
@@ -313,7 +370,8 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-6">
           <div className="max-w-5xl mx-auto">
-            {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} onNavigate={setPage} />}
+            <TrialGateBanner billing={ownerProfile?.billing} onNavigate={setPage} />
+            {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} onNavigate={setPage} user={user} billing={ownerProfile?.billing} />}
             {page === "traffic" && <TrafficPage data={data} winery={displayWinery} tier={tier} />}
             {page === "insights" && <InsightsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
             {page === "leads" && <LeadsPage winery={displayWinery} tier={tier} />}

@@ -23,7 +23,7 @@ import {
   Megaphone, Wine, MessageSquare, ArrowRight, Sparkles,
   Eye, CheckCircle, Map, ArrowUpRight, ArrowDownRight, Lock, Crown,
 } from "lucide-react";
-import { getWineryLeads, getWineryReservations } from "../../firebaseClient.js";
+import { getWineryLeads, getWineryReservations, getBillingSummary } from "../../firebaseClient.js";
 
 // ── Shared primitives (kept for Benchmark/Traffic/Trails imports) ──
 
@@ -174,14 +174,143 @@ const QuickAction = ({ icon: Icon, label, desc, onClick, tone = "purple" }) => {
   );
 };
 
+// ── New-customers hero ─────────────────────────────────────────
+// The headline number. Answers "what did I pay for / what did I get?"
+//   - Shows attributed first-time visitors this month.
+//   - Shows progress against either the free-trial allowance OR the
+//     monthly dollar cap, depending on which mode the owner is in.
+//   - CTA pushes to /upgrade (activate billing) when the trial is spent.
+
+const NewCustomersHero = ({ summary, billing, onNavigate }) => {
+  const nav = typeof onNavigate === "function" ? onNavigate : () => {};
+  const total  = summary?.total  || 0;
+  const paid   = summary?.paid   || 0;
+  const free   = summary?.free   || 0;
+  const capped = summary?.capped || 0;
+  const spend  = Number(summary?.spendDollars || 0);
+
+  const billingEnabled    = !!billing?.enabled;
+  const freeGranted       = Number(billing?.freeVisitsGranted   ?? 10);
+  const freeRemaining     = Number(billing?.freeVisitsRemaining ?? freeGranted);
+  const monthlyCap        = Number(billing?.monthlyCapDollars   ?? 200);
+  const capHit            = !!billing?.capHitThisMonth;
+  const paused            = !!billing?.pausedByPaymentFailure;
+
+  // Which progress bar to show?
+  //   - Still inside free trial -> bar = (granted - remaining) / granted
+  //   - Billing active           -> bar = spend / cap
+  const inTrial = !billingEnabled || freeRemaining > 0;
+  const trialUsed = Math.max(0, freeGranted - freeRemaining);
+  const trialPct  = freeGranted > 0 ? Math.min(100, Math.round((trialUsed / freeGranted) * 100)) : 0;
+  const spendPct  = monthlyCap  > 0 ? Math.min(100, Math.round((spend / monthlyCap) * 100))     : 0;
+
+  const pct = inTrial ? trialPct : spendPct;
+
+  // State copy — plain-English, owner-facing.
+  let state;
+  if (paused) {
+    state = {
+      kicker: "Billing paused",
+      sub: "Your last payment failed. Update your card to keep new customers flowing.",
+      cta: "Update card",
+      bar: "bg-red-500",
+    };
+  } else if (inTrial && freeRemaining > 0) {
+    state = {
+      kicker: `${freeRemaining} free trial ${freeRemaining === 1 ? "visit" : "visits"} left`,
+      sub: "We're bringing you new customers on the house. Add a card before the trial ends to keep them coming.",
+      cta: "Add card",
+      bar: "bg-purple-600",
+    };
+  } else if (inTrial && freeRemaining <= 0) {
+    state = {
+      kicker: "Free trial complete",
+      sub: "Activate pay-per-visit to keep receiving new customers.",
+      cta: "Activate billing",
+      bar: "bg-amber-500",
+    };
+  } else if (capHit) {
+    state = {
+      kicker: "Monthly cap reached",
+      sub: "You hit your spend cap. Any extra visits this month are free \u2014 they'll resume billing next month.",
+      cta: "Adjust cap",
+      bar: "bg-amber-500",
+    };
+  } else {
+    const remaining = Math.max(0, monthlyCap - spend);
+    state = {
+      kicker: `$${remaining.toFixed(0)} of this month's cap remaining`,
+      sub: "Pay-per-visit billing is active. We only charge for verified first-time visitors.",
+      cta: "Manage billing",
+      bar: "bg-purple-600",
+    };
+  }
+
+  const breakdown = [
+    { label: "paid",    value: paid,   show: paid   > 0 },
+    { label: "free",    value: free,   show: free   > 0 },
+    { label: "capped",  value: capped, show: capped > 0 },
+  ].filter(x => x.show);
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50 via-white to-rose-50 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-700 tracking-widest uppercase mb-1">
+            <Users className="w-3.5 h-3.5" />
+            New customers this month
+          </div>
+          <div className="flex items-baseline gap-2">
+            <div className="text-4xl font-bold text-gray-900 leading-none">{total}</div>
+            <div className="text-sm text-gray-500">from Sip805</div>
+          </div>
+          {breakdown.length > 0 && (
+            <div className="text-xs text-gray-500 mt-1">
+              {breakdown.map((b, i) => (
+                <span key={b.label}>
+                  {i > 0 && " \u00b7 "}
+                  <span className="font-semibold text-gray-700">{b.value}</span> {b.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => nav("upgrade")}
+          className="flex-shrink-0 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition"
+        >
+          {state.cta} <ArrowRight className="w-3 h-3" />
+        </button>
+      </div>
+
+      <div className="mt-4">
+        <div className="flex items-center justify-between text-[11px] font-medium text-gray-600 mb-1.5">
+          <span>{state.kicker}</span>
+          <span>
+            {inTrial
+              ? `${trialUsed}/${freeGranted}`
+              : `$${spend.toFixed(0)}/$${monthlyCap.toFixed(0)}`}
+          </span>
+        </div>
+        <div className="w-full h-2 bg-white/80 rounded-full overflow-hidden border border-purple-100">
+          <div className={`h-full ${state.bar} transition-all`} style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-[11px] text-gray-500 mt-2 leading-snug">{state.sub}</p>
+      </div>
+    </section>
+  );
+};
+
 // ── Page ───────────────────────────────────────────────────────
 
-export default function OverviewPage({ data, winery, tier, onNavigate }) {
+export default function OverviewPage({ data, winery, tier, onNavigate, user, billing }) {
   const navigate = typeof onNavigate === "function" ? onNavigate : () => {};
   const wineryId = winery?.id ?? winery?.wineryId;
 
   const [leads, setLeads] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [billingSummary, setBillingSummary] = useState(null);
 
   // Leads + upcoming-week reservations. Both queries are narrow enough to
   // run on every page load without caching; Firestore composite indexes
@@ -197,6 +326,20 @@ export default function OverviewPage({ data, winery, tier, onNavigate }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [wineryId]);
+
+  // Billing events this month — drives the "new customers" hero card.
+  // We intentionally count attributed events (paid + free + capped) as the
+  // "new customers Sip805 brought you" number; disputed/refunded are excluded
+  // inside getBillingSummary.
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    getBillingSummary(uid)
+      .then(s => { if (!cancelled) setBillingSummary(s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
   // === TODAY counts ==========================================
 
@@ -296,6 +439,18 @@ export default function OverviewPage({ data, winery, tier, onNavigate }) {
         <h2 className="text-xl font-bold text-gray-900">{greeting}</h2>
         <p className="text-xs text-gray-400 mt-0.5">Here's what needs your attention today.</p>
       </div>
+
+      {/* NEW CUSTOMERS HERO — how many people Sip805 has brought in this
+          month, and where the winery is in their free trial or monthly cap.
+          Renders only once a billing summary is loaded (so we don't flash
+          zeros before the query resolves). */}
+      {billingSummary && (
+        <NewCustomersHero
+          summary={billingSummary}
+          billing={billing}
+          onNavigate={navigate}
+        />
+      )}
 
       {/* TODAY */}
       <section>

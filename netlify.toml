@@ -1,0 +1,29 @@
+# Netlify deploy config for the Sip805 winery dashboard.
+# Mirrors vercel.json so either host can pick this repo up cleanly.
+
+[build]
+  command  = "npm run build"
+  publish  = "dist"
+
+# SPA fallback — every unknown path serves index.html so React Router can
+# handle it client-side. Without this, deep links like /leads or /overview
+# 404 on page refresh.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Immutable long-cache for Vite-hashed build artifacts.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Security headers on every response.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options  = "nosniff"
+    X-Frame-Options         = "SAMEORIGIN"
+    Referrer-Policy         = "strict-origin-when-cross-origin"
+    Permissions-Policy      = "camera=(), microphone=(), geolocation=(self)"
