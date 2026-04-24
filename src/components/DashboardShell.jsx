@@ -274,7 +274,7 @@ export default function DashboardShell({ user, ownerProfile, winery, firestoreTr
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-6">
           <div className="max-w-5xl mx-auto">
-            {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} />}
+            {page === "overview" && <OverviewPage data={data} winery={displayWinery} tier={tier} onNavigate={setPage} />}
             {page === "traffic" && <TrafficPage data={data} winery={displayWinery} tier={tier} />}
             {page === "insights" && <InsightsPage data={data} winery={displayWinery} tier={tier} trails={trails} />}
             {page === "leads" && <LeadsPage winery={displayWinery} tier={tier} />}
@@ -316,6 +316,9 @@ const SettingsPage = ({ winery, tier, onUpgrade, onLogout }) => (
       <button onClick={onLogout} className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-600 font-medium px-4 py-2.5 rounded-lg hover:bg-red-50 transition">
         <LogOut className="w-4 h-4" /> Sign Out
       </button>
+    </div>
+  </div>
+);
     </div>
   </div>
 );
